@@ -13,8 +13,8 @@
 
 
 void ingroup_inds_launcher(
-    const long *group_inds_data,
-    long *out_inds_data,
+    const long long *group_inds_data,
+    long long *out_inds_data,
     int N,
     int max_group_id
 );
@@ -36,8 +36,8 @@ void ingroup_inds_gpu(
   int max_group_id = group_inds.max().item().toLong();
 
 
-  long *group_inds_data = group_inds.data_ptr<long>();
-  long *out_inds_data = out_inds.data_ptr<long>();
+  const long long *group_inds_data = group_inds.data_ptr<long long>();
+  long long *out_inds_data = out_inds.data_ptr<long long>();
 
   ingroup_inds_launcher(
       group_inds_data,

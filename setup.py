@@ -28,7 +28,7 @@ def write_version_to_file(version, target_file):
 
 
 if __name__ == '__main__':
-    version = '0.6.0+%s' % get_git_commit_number()
+    version = '0.6.0'#+%s' % get_git_commit_number()
     write_version_to_file(version, 'pcdet/version.py')
 
     setup(
@@ -44,14 +44,14 @@ if __name__ == '__main__':
             'pyyaml',
             'scikit-image',
             'tqdm',
-            'SharedArray',
+            #'SharedArray',
             # 'spconv',  # spconv has different names depending on the cuda version
         ],
 
         author='Shaoshuai Shi',
         author_email='shaoshuaics@gmail.com',
         license='Apache License 2.0',
-        packages=find_packages(exclude=['tools', 'data', 'output']),
+        packages=find_packages(exclude=['tools', 'data', 'output', 'docker']),
         cmdclass={
             'build_ext': BuildExtension,
         },

@@ -11,7 +11,7 @@ All Rights Reserved 2019-2020.
 
 // #define DEBUG
 const int THREADS_PER_BLOCK_NMS = sizeof(unsigned long long) * 8;
-const float EPS = 1e-8;
+__device__ const float EPS = 1e-8;
 struct Point {
     float x, y;
     __device__ Point() {}
@@ -40,7 +40,7 @@ __device__ inline float cross(const Point &p1, const Point &p2, const Point &p0)
     return (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
 }
 
-__device__ int check_rect_cross(const Point &p1, const Point &p2, const Point &q1, const Point &q2){
+__device__ inline int check_rect_cross(const Point &p1, const Point &p2, const Point &q1, const Point &q2){
     int ret = min(p1.x,p2.x) <= max(q1.x,q2.x)  &&
               min(q1.x,q2.x) <= max(p1.x,p2.x) &&
               min(p1.y,p2.y) <= max(q1.y,q2.y) &&
