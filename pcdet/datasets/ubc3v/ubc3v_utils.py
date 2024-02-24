@@ -1,6 +1,7 @@
 import numpy as np
 import argparse
 from pathlib import Path
+from collections import OrderedDict
 from scipy.spatial.transform import Rotation
 from PIL import Image
 from scipy.io import loadmat
@@ -34,27 +35,25 @@ def get_annos(base, subset='easy-pose', split='train', seq='150'):
     
     posture = gt_data['joints'].squeeze()
     assert len(annos['Cam1']) == len(posture)
-    columns = {'HeadPGX': 'Head',
-               'Neck1PGX': 'Neck',
-               'RightShoulderPGX': 'Spine2',
-               'Spine1PGX': 'Spine1',
-               'SpinePGX': 'Spine',
-               'RightUpLegPGX': 'Hip',
-               'RightLegPGX': 'RHip',
-               'RightFootPGX': 'RKnee',
-               'RightToeBasePGX': 'RFoot',
-               'LeftLegPGX': 'LHip',
-               'LeftFootPGX': 'LKnee',
-               'LeftToeBasePGX': 'LFoot',
-               'RightForeArmPGX': 'RShoulder',
-               'RightHandPGX': 'RElbow',
-               'RightFingerBasePGX': 'RHand',
-               'LeftForeArmPGX': 'LShoulder',
-               'LeftHandPGX': 'LElbow',
-               'LeftFingerBasePGX': 'LHand'}
-    annos['Posture'] = [{new_key:joints[old_key].flat[0].squeeze().astype(np.float32)[12:15] 
-                         for old_key, new_key in columns.items()} 
-                        for joints in posture]
+    columns = OrderedDict()
+    old_keys = ('HeadPGX', 'Neck1PGX', 'RightShoulderPGX', 'Spine1PGX', 
+                'SpinePGX', 'RightUpLegPGX', 'RightLegPGX', 'RightFootPGX', 
+                'RightToeBasePGX', 'LeftLegPGX', 'LeftFootPGX', 
+                'LeftToeBasePGX', 'RightForeArmPGX', 'RightHandPGX', 
+                'RightFingerBasePGX', 'LeftForeArmPGX', 'LeftHandPGX', 
+                'LeftFingerBasePGX')
+    new_keys = ('Head', 'Neck', 'Spine2', 'Spine1', 'Spine', 'Hip', 'RHip',
+                'RKnee', 'RFoot', 'LHip', 'LKnee', 'LFoot', 'RShoulder',
+                'RElbow', 'RHand', 'LShoulder', 'LElbow', 'LHand')
+    for old_key, new_key in zip(old_keys, new_keys):
+        columns[old_key] = new_key
+
+    annos['Posture'] = []
+    for joints in posture:
+        pose = OrderedDict()
+        for old_key, new_key in columns.items():
+            pose[new_key] = joints[old_key].flat[0].squeeze().astype(np.float32)[12:15]
+        annos['Posture'].append(pose)
 
     annos = [{key:annos[key][i] for key in annos.keys()} for i in range(len(posture))]
     mapper = np.load(base_path / 'mapper.npy')
