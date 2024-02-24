@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 from pathlib import Path
 from scipy.spatial.transform import Rotation
 from PIL import Image
@@ -154,11 +155,20 @@ def draw_point_cloud(points, labels, joints):
 
 
 if __name__ == '__main__':
-    base = Path(r'D:/mestrado/OpenPCDet/data/ubc3v') 
-    annos, mapper = get_annos(base)
-    anno = annos[8]
-    labels = get_labels(anno)
-    points = get_points(anno, mapper)
+    parser = argparse.ArgumentParser(description='arg parser')
+    parser.add_argument('--base_path', type=str, default='D:/mestrado/OpenPCDet/data/ubc3v')
+    parser.add_argument('--subset_path', type=str, default='easy-pose')
+    parser.add_argument('--split_path', type=str, default='train')
+    parser.add_argument('--sequence_path', type=str, default='150')
+    parser.add_argument('--cam', type=str, default='Cam3')
+    parser.add_argument('--frame', type=int, default=8)
+    args = parser.parse_args()
+    
+    annos, mapper = get_annos(args.base_path, args.subset_path, 
+                              args.split_path, args.sequence_path)
+    anno = annos[args.frame]
+    labels = get_labels(anno, args.cam)
+    points = get_points(anno, mapper, args.cam)
     joints = get_joints(anno)
-    plot_point_cloud(points, labels, joints)
+    #plot_point_cloud(points, labels, joints)
     draw_point_cloud(points, labels, joints)
