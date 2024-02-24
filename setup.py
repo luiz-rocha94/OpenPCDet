@@ -9,7 +9,10 @@ def get_git_commit_number():
     if not os.path.exists('.git'):
         return '0000000'
 
-    cmd_out = subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
+    try:
+        cmd_out = subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
+    except:
+        return '0000000'
     git_commit_number = cmd_out.stdout.decode('utf-8')[:7]
     return git_commit_number
 
@@ -28,7 +31,7 @@ def write_version_to_file(version, target_file):
 
 
 if __name__ == '__main__':
-    version = '0.6.0'#+%s' % get_git_commit_number()
+    version = '0.6.0+%s' % get_git_commit_number()
     write_version_to_file(version, 'pcdet/version.py')
 
     setup(

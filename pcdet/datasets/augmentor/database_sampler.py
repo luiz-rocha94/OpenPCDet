@@ -5,7 +5,6 @@ import copy
 import numpy as np
 from skimage import io
 import torch
-import SharedArray
 import torch.distributed as dist
 
 from ...ops.iou3d_nms import iou3d_nms_utils
@@ -71,6 +70,7 @@ class DataBaseSampler(object):
 
     def __del__(self):
         if self.use_shared_memory:
+            import SharedArray
             self.logger.info('Deleting GT database from shared memory')
             cur_rank, num_gpus = common_utils.get_dist_info()
             sa_key = self.sampler_cfg.DB_DATA_PATH[0]
@@ -380,6 +380,7 @@ class DataBaseSampler(object):
         img_aug_gt_dict = self.initilize_image_aug_dict(data_dict, gt_boxes_mask)
 
         if self.use_shared_memory:
+            import SharedArray
             gt_database_data = SharedArray.attach(f"shm://{self.gt_database_data_key}")
             gt_database_data.setflags(write=0)
         else:
