@@ -9,32 +9,29 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 
 
-def get_annos(base, subset='easy-pose', split='train', seq='150'):
-    base_path = Path(base)
-    subset_path = base_path / subset
-    split_path = subset_path / split
-    sequence_path = split_path / seq
+def get_annos(sequence_path, cams=[], name='*.png'):
+    sequence_path = Path(sequence_path)
     assert sequence_path.exists()
     depth_path = sequence_path / 'images' / 'depthRender'
     class_path = sequence_path / 'images' / 'groundtruth'
     gt_file = sequence_path / 'groundtruth.mat'
-    digit_filter = lambda x: int(''.join(filter(str.isdigit, x.name)))
+    digit_filter = lambda x: int(''.join(filter(str.isdigit, x.name if isinstance(x, Path) else x)))
+    stop = digit_filter(name) if name != '*.png' else None
+    start = stop - 1 if stop else 0
     gt_data = loadmat(gt_file)
     cameras = gt_data['cameras']
     annos = {}
-    for cam in cameras.dtype.names:
-        depth_files = sorted((depth_path / cam).glob('*.png'), key=digit_filter)
-        class_files = sorted((class_path / cam).glob('*.png'), key=digit_filter)
-        frames = cameras[cam].flat[0]['frames'].flat[0].squeeze()
-        assert len(depth_files) == len(frames)
+    for cam in cams if cams else cameras.dtype.names:
+        depth_files = sorted((depth_path / cam).glob(name), key=digit_filter)
+        class_files = sorted((class_path / cam).glob(name), key=digit_filter)
+        frames = cameras[cam].flat[0]['frames'].flat[0].squeeze()[start:stop]
         annos[cam] = [{'rotation': x['rotate'].flat[0].squeeze().astype(np.float32), 
                        'translation': x['translate'].flat[0].squeeze().astype(np.float32),
                        'depth_file': str(depth_files[i]),
                        'class_file': str(class_files[i])} 
                        for i, x in enumerate(frames)]
     
-    posture = gt_data['joints'].squeeze()
-    assert len(annos['Cam1']) == len(posture)
+    posture = gt_data['joints'].squeeze()[start:stop]
     columns = OrderedDict()
     old_keys = ('HeadPGX', 'Neck1PGX', 'RightShoulderPGX', 'Spine1PGX', 
                 'SpinePGX', 'RightUpLegPGX', 'RightLegPGX', 'RightFootPGX', 
@@ -49,34 +46,58 @@ def get_annos(base, subset='easy-pose', split='train', seq='150'):
         columns[old_key] = new_key
 
     annos['Posture'] = []
+    annos['BBox3D'] = []
     for joints in posture:
         pose = OrderedDict()
         for old_key, new_key in columns.items():
             pose[new_key] = joints[old_key].flat[0].squeeze().astype(np.float32)[12:15]
+        joints = np.stack([pose[key] for key in pose])
+        min_, max_ = np.min(joints, 0), np.max(joints, 0)
+        whl = max_ - min_
+        center = whl/2 + min_
+        angle_min = np.arctan(min_[2]/min_[0])
+        angle_max = np.arctan(max_[2]/max_[0])
+        angle = np.mean([angle_min, angle_max])
+        angle = angle if angle > 0 else angle + 2*np.pi
+        if angle < 0:
+            angle = -angle
+        else:
+            angle = -np.pi+angle
+        rot = Rotation.from_euler('y', -angle)
+        whl = rot.apply(whl).astype(np.float32)
+        box3d = np.concatenate([center, whl, [angle, 1]])
         annos['Posture'].append(pose)
+        annos['BBox3D'].append(box3d)
 
     annos = [{key:annos[key][i] for key in annos.keys()} for i in range(len(posture))]
+    return annos
+
+
+def get_mapper(base_path):
+    base_path = Path(base_path)
     mapper = np.load(base_path / 'mapper.npy')
-    return annos, mapper
+    return mapper
 
 
-def get_points(anno, mapper, cam='Cam3'):
-    camera      = anno[cam]
-    depth_file  = camera['depth_file']
-    class_file  = camera['class_file']
-    translation = camera['translation']
-    rotation    = camera['rotation']
+def get_points(anno, mapper):
+    depth_file  = anno['depth_file']
+    class_file  = anno['class_file']
+    translation = anno['translation']
+    rotation    = anno['rotation']
     x_map, y_map = mapper[..., 0], mapper[..., 1]
-    mask = np.array(Image.open(class_file)).sum(-1) != 0
     
     frame = np.array(Image.open(depth_file).convert('L'))
+    colors = np.array(Image.open(class_file))
+    mask = colors.sum(-1) != 0
     #plt.imshow(frame, cmap='gray'); plt.show()
+    #plt.imshow(colors, cmap='gray'); plt.show()
     y, x = frame.shape
     min_, max_ = 50, 800
     zz = 1.03 * ((max_ - min_) * (frame / 255) + min_).astype(np.float32)
     xx, yy = x_map*zz, y_map*zz 
     points = np.stack([xx, yy, zz], axis=-1)
     points = points[mask].reshape((-1, 3))
+    labels = (colors[mask] / 255).reshape((-1, 4)).astype(np.float32)
     
     rotyx = rotation[0]
     if rotyx > 0:
@@ -98,17 +119,8 @@ def get_points(anno, mapper, cam='Cam3'):
     rot = Rotation.from_euler('xyz', [rotyx, rotyy, 0], degrees=True)
     points = rot.apply(points).astype(np.float32)
     points += translation.reshape((1,-1))
+    points = np.concatenate([points, labels], -1)
     return points    
-
-
-def get_labels(anno, cam='Cam3'):    
-    camera = anno[cam]
-    class_file = camera['class_file']
-    colors = np.array(Image.open(class_file))
-    #plt.imshow(colors); plt.show()
-    mask = colors.sum(-1) != 0
-    labels = (colors[mask] / 255).reshape((-1, 4)).astype(np.float32)
-    return labels
 
 
 def get_joints(anno):
@@ -131,7 +143,7 @@ def plot_point_cloud(points, labels, joints):
     plt.show()
 
 
-def draw_point_cloud(points, labels, joints):
+def draw_point_cloud(points, labels, joints, box3d):
     geometries = []
     lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
              ( 6,  7), ( 7,  8), ( 5,  9), ( 9, 10), (10, 11), (12, 13),
@@ -150,6 +162,22 @@ def draw_point_cloud(points, labels, joints):
     pcd.points = o3d.utility.Vector3dVector(points)
     pcd.colors = o3d.utility.Vector3dVector(labels[:, :3])
     geometries.append(pcd)
+    
+    center = box3d[0:3]
+    lwh = box3d[3:6]
+    axis_angles = np.array([0, box3d[6] + 1e-10, 0])
+    rot = o3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
+    oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
+    line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
+    lines = np.asarray(line_set.lines)
+    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+    line_set.paint_uniform_color([0, 255, 0])
+    geometries.append(line_set)
+    
+    
+    coords = o3d.geometry.TriangleMesh.create_coordinate_frame(10)
+    geometries.append(coords)
     o3d.visualization.draw_geometries(geometries)
 
 
@@ -160,14 +188,16 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=int, default=8)
+    parser.add_argument('--frame', type=str, default='mayaProject.000001.png')
     args = parser.parse_args()
     
-    annos, mapper = get_annos(args.base_path, args.subset_path, 
-                              args.split_path, args.sequence_path)
-    anno = annos[args.frame]
-    labels = get_labels(anno, args.cam)
-    points = get_points(anno, mapper, args.cam)
+    sequence_path = Path(args.base_path) / args.subset_path / args.split_path / args.sequence_path
+    mapper = get_mapper(args.base_path)
+    anno = get_annos(sequence_path, [args.cam], args.frame)[0]
+    anno.update(anno.pop(args.cam))
+    #labels = get_labels(anno)
+    points = get_points(anno, mapper)
     joints = get_joints(anno)
-    #plot_point_cloud(points, labels, joints)
-    draw_point_cloud(points, labels, joints)
+    box3d = anno['BBox3D']
+    #plot_point_cloud(points[:, :3], points[:, 3:], joints)
+    draw_point_cloud(points[:, :3], points[:, 3:], joints, box3d)

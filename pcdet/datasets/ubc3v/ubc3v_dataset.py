@@ -7,9 +7,12 @@ import numpy as np
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import box_utils, common_utils
 from ..dataset import DatasetTemplate
+from .utils import get_annos, get_points, get_mapper
 
 
-class CustomDataset(DatasetTemplate):
+class UBC3VDataset(DatasetTemplate):
+    frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-2]+x.parts[-1])))
+    
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
         """
         Args:
@@ -23,17 +26,18 @@ class CustomDataset(DatasetTemplate):
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
-
-        split_dir = os.path.join(self.root_path, 'ImageSets', (self.split + '.txt'))
-        self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if os.path.exists(split_dir) else None
-
-        self.custom_infos = []
+        
+        split_dir = self.root_path / self.dataset_cfg.SUBSET / self.split
+        assert split_dir.exists()
+        self.sample_id_list = sorted(split_dir.glob('*/images/depthRender/*/*.png'), key=UBC3VDataset.frame_filter)
+        
+        self.ubc3v_infos = []
         self.include_data(self.mode)
         self.map_class_to_kitti = self.dataset_cfg.MAP_CLASS_TO_KITTI
 
     def include_data(self, mode):
-        self.logger.info('Loading Custom dataset.')
-        custom_infos = []
+        self.logger.info('Loading UBC3V dataset.')
+        ubc3v_infos = []
 
         for info_path in self.dataset_cfg.INFO_PATH[mode]:
             info_path = self.root_path / info_path
@@ -41,16 +45,24 @@ class CustomDataset(DatasetTemplate):
                 continue
             with open(info_path, 'rb') as f:
                 infos = pickle.load(f)
-                custom_infos.extend(infos)
+                ubc3v_infos.extend(infos)
 
-        self.custom_infos.extend(custom_infos)
-        self.logger.info('Total samples for CUSTOM dataset: %d' % (len(custom_infos)))
+        self.ubc3v_infos.extend(ubc3v_infos)
+        self.logger.info('Total samples for CUSTOM dataset: %d' % (len(ubc3v_infos)))
+
+    def get_anno(self, idx):
+        file = self.sample_id_list[idx]
+        assert file.exists()
+        sequence_path = file.parents[3]
+        cams = [file.parts[-2]]
+        name = file.name
+        anno = get_annos(sequence_path, cams, name)[0]
+        anno.update(anno.pop(cams[0]))
+        return anno
 
     def get_label(self, idx):
-        label_file = self.root_path / 'labels' / ('%s.txt' % idx)
-        assert label_file.exists()
-        with open(label_file, 'r') as f:
-            lines = f.readlines()
+        anno = self.get_anno(idx)
+        joints = get_joints(anno)
 
         # [N, 8]: (x y z dx dy dz heading_angle category_id)
         gt_boxes = []
@@ -63,9 +75,9 @@ class CustomDataset(DatasetTemplate):
         return np.array(gt_boxes, dtype=np.float32), np.array(gt_names)
 
     def get_lidar(self, idx):
-        lidar_file = self.root_path / 'points' / ('%s.npy' % idx)
-        assert lidar_file.exists()
-        point_features = np.load(lidar_file)
+        anno = self.get_anno(idx)
+        mapper = get_mapper(self.root_path)
+        point_features = get_points(anno, mapper)
         return point_features
 
     def set_split(self, split):
@@ -75,20 +87,21 @@ class CustomDataset(DatasetTemplate):
         )
         self.split = split
 
-        split_dir = self.root_path / 'ImageSets' / (self.split + '.txt')
-        self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
+        split_dir = self.root_path / self.dataset_cfg.SUBSET / self.split
+        assert split_dir.exists()
+        self.sample_id_list = sorted(split_dir.glob('*/images/depthRender/*/*.png'), key=UBC3VDataset.frame_filter)
 
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
             return len(self.sample_id_list) * self.total_epochs
 
-        return len(self.custom_infos)
+        return len(self.ubc3v_infos)
 
     def __getitem__(self, index):
         if self._merge_all_iters_to_one_epoch:
-            index = index % len(self.custom_infos)
+            index = index % len(self.ubc3v_infos)
 
-        info = copy.deepcopy(self.custom_infos[index])
+        info = copy.deepcopy(self.ubc3v_infos[index])
         sample_idx = info['point_cloud']['lidar_idx']
         points = self.get_lidar(sample_idx)
         input_dict = {
@@ -111,7 +124,7 @@ class CustomDataset(DatasetTemplate):
         return data_dict
 
     def evaluation(self, det_annos, class_names, **kwargs):
-        if 'annos' not in self.custom_infos[0].keys():
+        if 'annos' not in self.ubc3v_infos[0].keys():
             return 'No ground-truth boxes for evaluation', {}
 
         def kitti_eval(eval_det_annos, eval_gt_annos, map_name_to_kitti):
@@ -130,7 +143,7 @@ class CustomDataset(DatasetTemplate):
             return ap_result_str, ap_dict
 
         eval_det_annos = copy.deepcopy(det_annos)
-        eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.custom_infos]
+        eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.ubc3v_infos]
 
         if kwargs['eval_metric'] == 'kitti':
             ap_result_str, ap_dict = kitti_eval(eval_det_annos, eval_gt_annos, self.map_class_to_kitti)
@@ -143,6 +156,7 @@ class CustomDataset(DatasetTemplate):
         import concurrent.futures as futures
 
         def process_single_scene(sample_idx):
+            sample_idx = UBC3VDataset.frame_filter(sample_idx)
             print('%s sample_idx: %s' % (self.split, sample_idx))
             info = {}
             pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
@@ -168,7 +182,7 @@ class CustomDataset(DatasetTemplate):
         import torch
 
         database_save_path = Path(self.root_path) / ('gt_database' if split == 'train' else ('gt_database_%s' % split))
-        db_info_save_path = Path(self.root_path) / ('custom_dbinfos_%s.pkl' % split)
+        db_info_save_path = Path(self.root_path) / ('ubc3v_dbinfos_%s.pkl' % split)
 
         database_save_path.mkdir(parents=True, exist_ok=True)
         all_db_infos = {}
@@ -230,34 +244,34 @@ class CustomDataset(DatasetTemplate):
                 f.write(line)
 
 
-def create_custom_infos(dataset_cfg, class_names, data_path, save_path, workers=4):
-    dataset = CustomDataset(
+def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4):
+    dataset = UBC3VDataset(
         dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path,
         training=False, logger=common_utils.create_logger()
     )
     train_split, val_split = 'train', 'val'
     num_features = len(dataset_cfg.POINT_FEATURE_ENCODING.src_feature_list)
 
-    train_filename = save_path / ('custom_infos_%s.pkl' % train_split)
-    val_filename = save_path / ('custom_infos_%s.pkl' % val_split)
+    train_filename = save_path / ('ubc3v_infos_%s.pkl' % train_split)
+    val_filename = save_path / ('ubc3v_infos_%s.pkl' % val_split)
 
     print('------------------------Start to generate data infos------------------------')
 
     dataset.set_split(train_split)
-    custom_infos_train = dataset.get_infos(
+    ubc3v_infos_train = dataset.get_infos(
         class_names, num_workers=workers, has_label=True, num_features=num_features
     )
     with open(train_filename, 'wb') as f:
-        pickle.dump(custom_infos_train, f)
-    print('Custom info train file is saved to %s' % train_filename)
+        pickle.dump(ubc3v_infos_train, f)
+    print('UBC3V info train file is saved to %s' % train_filename)
 
     dataset.set_split(val_split)
-    custom_infos_val = dataset.get_infos(
+    ubc3v_infos_val = dataset.get_infos(
         class_names, num_workers=workers, has_label=True, num_features=num_features
     )
     with open(val_filename, 'wb') as f:
-        pickle.dump(custom_infos_val, f)
-    print('Custom info train file is saved to %s' % val_filename)
+        pickle.dump(ubc3v_infos_val, f)
+    print('UBC3V info train file is saved to %s' % val_filename)
 
     print('------------------------Start create groundtruth database for data augmentation------------------------')
     dataset.set_split(train_split)
@@ -268,16 +282,16 @@ def create_custom_infos(dataset_cfg, class_names, data_path, save_path, workers=
 if __name__ == '__main__':
     import sys
 
-    if sys.argv.__len__() > 1 and sys.argv[1] == 'create_custom_infos':
+    if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
         import yaml
         from pathlib import Path
         from easydict import EasyDict
 
         dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        create_custom_infos(
+        create_ubc3v_infos(
             dataset_cfg=dataset_cfg,
-            class_names=['Vehicle', 'Pedestrian', 'Cyclist'],
-            data_path=ROOT_DIR / 'data' / 'custom',
-            save_path=ROOT_DIR / 'data' / 'custom',
+            class_names=['Pedestrian'],
+            data_path=ROOT_DIR / 'data' / 'ubc3v',
+            save_path=ROOT_DIR / 'data' / 'ubc3v',
         )
