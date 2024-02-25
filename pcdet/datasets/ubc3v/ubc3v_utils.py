@@ -52,19 +52,22 @@ def get_annos(sequence_path, cams=[], name='*.png'):
         for old_key, new_key in columns.items():
             pose[new_key] = joints[old_key].flat[0].squeeze().astype(np.float32)[12:15]
         joints = np.stack([pose[key] for key in pose])
+        center = joints[5]
+        half = joints[6] - joints[9]
+        angle = np.arctan(half[2]/half[0])
+        angle = angle if angle > 0 else 2*np.pi + angle
+        if np.abs(center[0]) >= np.abs(center[2]):
+            if angle <= np.pi/2:
+                angle -= np.sign(center[0])*np.pi/2
+            else:
+                angle += np.sign(center[0])*np.pi/2
+        else:
+            angle += np.sign(center[2])*np.pi/2
+        
+        rot = Rotation.from_euler('y', -angle)
+        joints = rot.apply(joints).astype(np.float32)
         min_, max_ = np.min(joints, 0), np.max(joints, 0)
         whl = max_ - min_
-        center = whl/2 + min_
-        angle_min = np.arctan(min_[2]/min_[0])
-        angle_max = np.arctan(max_[2]/max_[0])
-        angle = np.mean([angle_min, angle_max])
-        angle = angle if angle > 0 else angle + 2*np.pi
-        if angle < 0:
-            angle = -angle
-        else:
-            angle = -np.pi+angle
-        rot = Rotation.from_euler('y', -angle)
-        whl = rot.apply(whl).astype(np.float32)
         box3d = np.concatenate([center, whl, [angle, 1]])
         annos['Posture'].append(pose)
         annos['BBox3D'].append(box3d)
@@ -165,15 +168,20 @@ def draw_point_cloud(points, labels, joints, box3d):
     
     center = box3d[0:3]
     lwh = box3d[3:6]
-    axis_angles = np.array([0, box3d[6] + 1e-10, 0])
+    angle = box3d[6]
+    axis_angles = np.array([0, angle + 1e-10, 0])
     rot = o3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
     oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
     line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
-    lines = np.asarray(line_set.lines)
-    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
-    line_set.lines = o3d.utility.Vector2iVector(lines)
     line_set.paint_uniform_color([0, 255, 0])
     geometries.append(line_set)
+    
+    forward = 10*np.array([np.cos(angle), 0, np.sin(angle)], dtype=center.dtype)
+    normal = np.stack([center, center + forward])
+    line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(normal), 
+                                    lines=o3d.utility.Vector2iVector([(0, 1)]))
+    line_set.paint_uniform_color([255, 0, 0])
+    geometries.append(line_set)    
     
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(10)
