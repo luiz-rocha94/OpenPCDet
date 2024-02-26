@@ -33,22 +33,24 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     
     posture = gt_data['joints'].squeeze()[start:stop]
     names = get_joints_name()
-    annos['Posture'] = [np.stack([joints[key].flat[0].squeeze().astype(np.float32)[12:15] 
-                         for key in names]) for joints in posture]
-    posture = np.array(annos['Posture'])
+    posture = np.array([np.stack([joints[key].flat[0].squeeze().astype(np.float32)[12:15] 
+                        for key in names]) for joints in posture])
+    posture[:, :, [1, 2]] = posture[:, :, [2, 1]]
+    posture = posture/100
     center = posture[:, 5]
     half = posture[:, 6] - posture[:, 9]
-    angle = np.arctan(half[:, 2]/half[:, 0])
+    angle = np.arctan(half[:, 1]/half[:, 0])
     angle = angle + (angle < 0)*2*np.pi
-    forward = np.abs(center[:, 0]) >= np.abs(center[:, 2])
+    forward = np.abs(center[:, 0]) >= np.abs(center[:, 1])
     direction = -1*(angle <= np.pi/2) + 1*(angle > np.pi/2)
-    x, z = np.sign(center[:, 0])*np.pi/2, np.sign(center[:, 2])*np.pi/2
-    angle = angle + forward*direction*x + ~forward*z
+    x, y = np.sign(center[:, 0])*np.pi/2, np.sign(center[:, 1])*np.pi/2
+    angle = angle + forward*direction*x + ~forward*y
     min_, max_ = posture.min(1), posture.max(1)
     whl = max_ - min_
-    annos['Label'] = ['Pedestrian' for _ in range(len(posture))]
     box3d = np.concatenate([center, whl, angle[:, np.newaxis]], 
                            axis=1).astype(np.float32)
+    annos['Posture'] = posture
+    annos['Label'] = ['Pedestrian' for _ in range(len(posture))]
     annos['BBox3D'] = box3d
     annos = [{key:annos[key][i] for key in annos.keys()} for i in range(len(posture))]
     return annos
@@ -100,6 +102,8 @@ def get_points(anno, mapper):
     rot = Rotation.from_euler('xyz', [rotyx, rotyy, 0], degrees=True)
     points = rot.apply(points).astype(np.float32)
     points += translation.reshape((1,-1))
+    points = points/100
+    points[:, [1, 2]] = points[:, [2, 1]]
     points = np.concatenate([points, labels], -1)
     return points    
 
@@ -144,7 +148,7 @@ def draw_point_cloud(points, labels, joints, box3d):
     line_set.paint_uniform_color([0, 1, 0])
     geometries.append(line_set)
     for joint in joints:
-        mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
+        mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
         mesh_sphere.paint_uniform_color([0, 1, 0])
         mesh_sphere.translate(joint)
         geometries.append(mesh_sphere)
@@ -157,14 +161,14 @@ def draw_point_cloud(points, labels, joints, box3d):
     center = box3d[0:3]
     lwh = box3d[3:6]
     angle = box3d[6]
-    axis_angles = np.array([0, angle + 1e-10, 0])
+    axis_angles = np.array([0, 0, angle + 1e-10])
     rot = o3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
     oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
     line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
     line_set.paint_uniform_color([0, 255, 0])
     geometries.append(line_set)
     
-    forward = 10*np.array([np.cos(angle), 0, np.sin(angle)], dtype=center.dtype)
+    forward = 0.1*np.array([np.cos(angle), np.sin(angle), 0], dtype=center.dtype)
     normal = np.stack([center, center + forward])
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(normal), 
                                     lines=o3d.utility.Vector2iVector([(0, 1)]))
@@ -172,7 +176,7 @@ def draw_point_cloud(points, labels, joints, box3d):
     geometries.append(line_set)    
     
     
-    coords = o3d.geometry.TriangleMesh.create_coordinate_frame(10)
+    coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
     o3d.visualization.draw_geometries(geometries)
 
@@ -188,7 +192,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     sequence_path = Path(args.base_path) / args.subset_path / args.split_path / args.sequence_path
-    mapper = get_mapper(args.base_path)
+    mapper = get_mapper(Path(args.base_path) / args.subset_path)
     anno = get_annos(sequence_path, [args.cam], args.frame)[0]
     anno.update(anno.pop(args.cam))
     #labels = get_labels(anno)
