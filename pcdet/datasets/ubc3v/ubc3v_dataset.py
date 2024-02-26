@@ -4,15 +4,10 @@ import os
 
 import numpy as np
 
-#from ...ops.roiaware_pool3d import roiaware_pool3d_utils
-#from ...utils import box_utils, common_utils
-#from ..dataset import DatasetTemplate
-#from .utils import get_annos, get_joints, get_points, get_mapper
-
-from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
-from pcdet.utils import box_utils, common_utils
-from pcdet.datasets.dataset import DatasetTemplate
-from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
+from ...ops.roiaware_pool3d import roiaware_pool3d_utils
+from ...utils import box_utils, common_utils
+from ..dataset import DatasetTemplate
+from .ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
 
 
 class UBC3VDataset(DatasetTemplate):
@@ -254,7 +249,7 @@ def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4
         dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path,
         training=False, logger=common_utils.create_logger()
     )
-    return dataset
+
     train_split, val_split = 'train', 'valid'
     num_features = len(dataset_cfg.POINT_FEATURE_ENCODING.src_feature_list)
 
@@ -287,18 +282,16 @@ def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4
 
 if __name__ == '__main__':
     import sys
-
-    #if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
-    import yaml
-    from pathlib import Path
-    from easydict import EasyDict
-
-    #dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
-    dataset_cfg = EasyDict(yaml.safe_load(open('D:/mestrado/OpenPCDet/tools/cfgs/dataset_configs/ubc3v_dataset.yaml')))
-    ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-    dataset =       create_ubc3v_infos(
-                    dataset_cfg=dataset_cfg,
-                    class_names=['Pedestrian'],
-                    data_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
-                    save_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
-                )
+    if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
+        import yaml
+        from pathlib import Path
+        from easydict import EasyDict
+    
+        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
+        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
+        create_ubc3v_infos(
+        dataset_cfg=dataset_cfg,
+        class_names=['Pedestrian'],
+        data_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+        save_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+        )
