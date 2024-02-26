@@ -32,46 +32,24 @@ def get_annos(sequence_path, cams=[], name='*.png'):
                        for i, x in enumerate(frames)]
     
     posture = gt_data['joints'].squeeze()[start:stop]
-    columns = OrderedDict()
-    old_keys = ('HeadPGX', 'Neck1PGX', 'RightShoulderPGX', 'Spine1PGX', 
-                'SpinePGX', 'RightUpLegPGX', 'RightLegPGX', 'RightFootPGX', 
-                'RightToeBasePGX', 'LeftLegPGX', 'LeftFootPGX', 
-                'LeftToeBasePGX', 'RightForeArmPGX', 'RightHandPGX', 
-                'RightFingerBasePGX', 'LeftForeArmPGX', 'LeftHandPGX', 
-                'LeftFingerBasePGX')
-    new_keys = ('Head', 'Neck', 'Spine2', 'Spine1', 'Spine', 'Hip', 'RHip',
-                'RKnee', 'RFoot', 'LHip', 'LKnee', 'LFoot', 'RShoulder',
-                'RElbow', 'RHand', 'LShoulder', 'LElbow', 'LHand')
-    for old_key, new_key in zip(old_keys, new_keys):
-        columns[old_key] = new_key
-
-    annos['Posture'] = []
-    annos['BBox3D'] = []
-    for joints in posture:
-        pose = OrderedDict()
-        for old_key, new_key in columns.items():
-            pose[new_key] = joints[old_key].flat[0].squeeze().astype(np.float32)[12:15]
-        joints = np.stack([pose[key] for key in pose])
-        center = joints[5]
-        half = joints[6] - joints[9]
-        angle = np.arctan(half[2]/half[0])
-        angle = angle if angle > 0 else 2*np.pi + angle
-        if np.abs(center[0]) >= np.abs(center[2]):
-            if angle <= np.pi/2:
-                angle -= np.sign(center[0])*np.pi/2
-            else:
-                angle += np.sign(center[0])*np.pi/2
-        else:
-            angle += np.sign(center[2])*np.pi/2
-        
-        rot = Rotation.from_euler('y', -angle)
-        joints = rot.apply(joints).astype(np.float32)
-        min_, max_ = np.min(joints, 0), np.max(joints, 0)
-        whl = max_ - min_
-        box3d = np.concatenate([center, whl, [angle, 1]])
-        annos['Posture'].append(pose)
-        annos['BBox3D'].append(box3d)
-
+    names = get_joints_name()
+    annos['Posture'] = [np.stack([joints[key].flat[0].squeeze().astype(np.float32)[12:15] 
+                         for key in names]) for joints in posture]
+    posture = np.array(annos['Posture'])
+    center = posture[:, 5]
+    half = posture[:, 6] - posture[:, 9]
+    angle = np.arctan(half[:, 2]/half[:, 0])
+    angle = angle + (angle < 0)*2*np.pi
+    forward = np.abs(center[:, 0]) >= np.abs(center[:, 2])
+    direction = -1*(angle <= np.pi/2) + 1*(angle > np.pi/2)
+    x, z = np.sign(center[:, 0])*np.pi/2, np.sign(center[:, 2])*np.pi/2
+    angle = angle + forward*direction*x + ~forward*z
+    min_, max_ = posture.min(1), posture.max(1)
+    whl = max_ - min_
+    annos['Label'] = ['Pedestrian' for _ in range(len(posture))]
+    box3d = np.concatenate([center, whl, angle[:, np.newaxis]], 
+                           axis=1).astype(np.float32)
+    annos['BBox3D'] = box3d
     annos = [{key:annos[key][i] for key in annos.keys()} for i in range(len(posture))]
     return annos
 
@@ -126,10 +104,20 @@ def get_points(anno, mapper):
     return points    
 
 
-def get_joints(anno):
-    pose = anno['Posture']
-    joints = np.stack([pose[key] for key in pose])
-    return joints
+def get_joints_name():
+    names = OrderedDict()
+    old_keys = ('HeadPGX', 'Neck1PGX', 'RightShoulderPGX', 'Spine1PGX', 
+                'SpinePGX', 'RightUpLegPGX', 'RightLegPGX', 'RightFootPGX', 
+                'RightToeBasePGX', 'LeftLegPGX', 'LeftFootPGX', 
+                'LeftToeBasePGX', 'RightForeArmPGX', 'RightHandPGX', 
+                'RightFingerBasePGX', 'LeftForeArmPGX', 'LeftHandPGX', 
+                'LeftFingerBasePGX')
+    new_keys = ('Head', 'Neck', 'Spine2', 'Spine1', 'Spine', 'Hip', 'RHip',
+                'RKnee', 'RFoot', 'LHip', 'LKnee', 'LFoot', 'RShoulder',
+                'RElbow', 'RHand', 'LShoulder', 'LElbow', 'LHand')
+    for old_key, new_key in zip(old_keys, new_keys):
+        names[old_key] = new_key
+    return names
 
 
 def plot_point_cloud(points, labels, joints):
@@ -196,7 +184,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=str, default='mayaProject.000001.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
     args = parser.parse_args()
     
     sequence_path = Path(args.base_path) / args.subset_path / args.split_path / args.sequence_path
@@ -205,7 +193,8 @@ if __name__ == '__main__':
     anno.update(anno.pop(args.cam))
     #labels = get_labels(anno)
     points = get_points(anno, mapper)
-    joints = get_joints(anno)
+    #joints = get_joints(anno)
+    joints = anno['Posture']
     box3d = anno['BBox3D']
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
     draw_point_cloud(points[:, :3], points[:, 3:], joints, box3d)

@@ -4,10 +4,15 @@ import os
 
 import numpy as np
 
-from ...ops.roiaware_pool3d import roiaware_pool3d_utils
-from ...utils import box_utils, common_utils
-from ..dataset import DatasetTemplate
-from .utils import get_annos, get_points, get_mapper
+#from ...ops.roiaware_pool3d import roiaware_pool3d_utils
+#from ...utils import box_utils, common_utils
+#from ..dataset import DatasetTemplate
+#from .utils import get_annos, get_joints, get_points, get_mapper
+
+from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
+from pcdet.utils import box_utils, common_utils
+from pcdet.datasets.dataset import DatasetTemplate
+from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
 
 
 class UBC3VDataset(DatasetTemplate):
@@ -27,13 +32,12 @@ class UBC3VDataset(DatasetTemplate):
         )
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
         
-        split_dir = self.root_path / self.dataset_cfg.SUBSET / self.split
+        split_dir = self.root_path / self.split
         assert split_dir.exists()
-        self.sample_id_list = sorted(split_dir.glob('*/images/depthRender/*/*.png'), key=UBC3VDataset.frame_filter)
+        self.sample_id_list = sorted([UBC3VDataset.frame_filter(file) for file in split_dir.glob('*/images/depthRender/*/*.png')])
         
         self.ubc3v_infos = []
         self.include_data(self.mode)
-        self.map_class_to_kitti = self.dataset_cfg.MAP_CLASS_TO_KITTI
 
     def include_data(self, mode):
         self.logger.info('Loading UBC3V dataset.')
@@ -48,37 +52,29 @@ class UBC3VDataset(DatasetTemplate):
                 ubc3v_infos.extend(infos)
 
         self.ubc3v_infos.extend(ubc3v_infos)
-        self.logger.info('Total samples for CUSTOM dataset: %d' % (len(ubc3v_infos)))
+        self.logger.info('Total samples for UBC3V dataset: %d' % (len(ubc3v_infos)))
 
     def get_anno(self, idx):
-        file = self.sample_id_list[idx]
-        assert file.exists()
-        sequence_path = file.parents[3]
-        cams = [file.parts[-2]]
-        name = file.name
+        name = 'mayaProject.{}.png'.format(str(idx)[-6:])
+        cams = ['Cam{}'.format(str(idx)[-7])]
+        sequence_path = self.root_path / self.split / str(idx)[:-7]
         anno = get_annos(sequence_path, cams, name)[0]
         anno.update(anno.pop(cams[0]))
         return anno
 
     def get_label(self, idx):
         anno = self.get_anno(idx)
-        joints = get_joints(anno)
-
-        # [N, 8]: (x y z dx dy dz heading_angle category_id)
-        gt_boxes = []
-        gt_names = []
-        for line in lines:
-            line_list = line.strip().split(' ')
-            gt_boxes.append(line_list[:-1])
-            gt_names.append(line_list[-1])
-
-        return np.array(gt_boxes, dtype=np.float32), np.array(gt_names)
+        #joints = get_joints(anno)
+        bbox = anno['BBox3D'].reshape((1,-1))
+        gt_boxes = bbox[:, :7]
+        gt_names = np.array(['Pedestrian'])[bbox[:, 7].astype(np.int32)].reshape((1,-1))
+        return gt_boxes, gt_names
 
     def get_lidar(self, idx):
         anno = self.get_anno(idx)
         mapper = get_mapper(self.root_path)
         point_features = get_points(anno, mapper)
-        return point_features
+        return point_features[:, :3]
 
     def set_split(self, split):
         super().__init__(
@@ -87,9 +83,9 @@ class UBC3VDataset(DatasetTemplate):
         )
         self.split = split
 
-        split_dir = self.root_path / self.dataset_cfg.SUBSET / self.split
+        split_dir = self.root_path / self.split
         assert split_dir.exists()
-        self.sample_id_list = sorted(split_dir.glob('*/images/depthRender/*/*.png'), key=UBC3VDataset.frame_filter)
+        self.sample_id_list = sorted([UBC3VDataset.frame_filter(file) for file in split_dir.glob('*/images/depthRender/*/*.png')])
 
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
@@ -105,7 +101,7 @@ class UBC3VDataset(DatasetTemplate):
         sample_idx = info['point_cloud']['lidar_idx']
         points = self.get_lidar(sample_idx)
         input_dict = {
-            'frame_id': self.sample_id_list[index],
+            'frame_id': sample_idx,
             'points': points
         }
 
@@ -155,28 +151,37 @@ class UBC3VDataset(DatasetTemplate):
     def get_infos(self, class_names, num_workers=4, has_label=True, sample_id_list=None, num_features=4):
         import concurrent.futures as futures
 
-        def process_single_scene(sample_idx):
-            sample_idx = UBC3VDataset.frame_filter(sample_idx)
-            print('%s sample_idx: %s' % (self.split, sample_idx))
-            info = {}
-            pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
-            info['point_cloud'] = pc_info
+        def process_single_scene(sequence_path):
+            print('%s sequence: %s' % (self.split, sequence_path.name))
+            annos = get_annos(sequence_path)
+            infos = []
+            for anno in annos:
+                cams = [key for key in anno if 'Cam' in key]
+                for cam in cams:
+                    info = {}
+                    sample_idx = UBC3VDataset.frame_filter(Path(anno[cam]['depth_file']))
+                    pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
+                    info['point_cloud'] = pc_info
+        
+                    if has_label:
+                        annotations = {}
+                        annotations['name'] = np.array(anno['Label']).reshape((1, -1))
+                        annotations['gt_boxes_lidar'] = np.array(anno['BBox3D']).reshape((1, -1))
+                        info['annos'] = annotations
+                    infos.append(info)
 
-            if has_label:
-                annotations = {}
-                gt_boxes_lidar, name = self.get_label(sample_idx)
-                annotations['name'] = name
-                annotations['gt_boxes_lidar'] = gt_boxes_lidar[:, :7]
-                info['annos'] = annotations
+            return infos
 
-            return info
-
-        sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
-
+        split_dir = self.root_path / self.split
+        sample_id_list = sorted(split_dir.glob('*'), key=lambda x: int(x.name))
+        
         # create a thread pool to improve the velocity
         with futures.ThreadPoolExecutor(num_workers) as executor:
-            infos = executor.map(process_single_scene, sample_id_list)
-        return list(infos)
+            sequences = executor.map(process_single_scene, sample_id_list)
+        infos = []
+        for info in sequences:
+            infos.extend(info)       
+        return infos
 
     def create_groundtruth_database(self, info_path=None, used_classes=None, split='train'):
         import torch
@@ -249,7 +254,8 @@ def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4
         dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path,
         training=False, logger=common_utils.create_logger()
     )
-    train_split, val_split = 'train', 'val'
+    return dataset
+    train_split, val_split = 'train', 'valid'
     num_features = len(dataset_cfg.POINT_FEATURE_ENCODING.src_feature_list)
 
     train_filename = save_path / ('ubc3v_infos_%s.pkl' % train_split)
@@ -274,24 +280,25 @@ def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4
     print('UBC3V info train file is saved to %s' % val_filename)
 
     print('------------------------Start create groundtruth database for data augmentation------------------------')
-    dataset.set_split(train_split)
-    dataset.create_groundtruth_database(train_filename, split=train_split)
+    #dataset.set_split(train_split)
+    #dataset.create_groundtruth_database(train_filename, split=train_split)
     print('------------------------Data preparation done------------------------')
 
 
 if __name__ == '__main__':
     import sys
 
-    if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
-        import yaml
-        from pathlib import Path
-        from easydict import EasyDict
+    #if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
+    import yaml
+    from pathlib import Path
+    from easydict import EasyDict
 
-        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
-        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        create_ubc3v_infos(
-            dataset_cfg=dataset_cfg,
-            class_names=['Pedestrian'],
-            data_path=ROOT_DIR / 'data' / 'ubc3v',
-            save_path=ROOT_DIR / 'data' / 'ubc3v',
-        )
+    #dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
+    dataset_cfg = EasyDict(yaml.safe_load(open('D:/mestrado/OpenPCDet/tools/cfgs/dataset_configs/ubc3v_dataset.yaml')))
+    ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
+    dataset =       create_ubc3v_infos(
+                    dataset_cfg=dataset_cfg,
+                    class_names=['Pedestrian'],
+                    data_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+                    save_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+                )
