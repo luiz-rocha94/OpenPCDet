@@ -1,13 +1,17 @@
 import copy
 import pickle
 import os
-
 import numpy as np
-
-from ...ops.roiaware_pool3d import roiaware_pool3d_utils
-from ...utils import box_utils, common_utils
-from ..dataset import DatasetTemplate
-from .ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
+try:
+    from ...ops.roiaware_pool3d import roiaware_pool3d_utils
+    from ...utils import box_utils, common_utils
+    from ..dataset import DatasetTemplate
+    from .ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
+except:
+    from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
+    from pcdet.utils import box_utils, common_utils
+    from pcdet.datasets.dataset import DatasetTemplate
+    from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
 
 
 class UBC3VDataset(DatasetTemplate):
@@ -25,19 +29,14 @@ class UBC3VDataset(DatasetTemplate):
         super().__init__(
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
-        self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
-        
-        split_dir = self.root_path / self.split
-        assert split_dir.exists()
-        self.sample_id_list = sorted([UBC3VDataset.frame_filter(file) for file in split_dir.glob('*/images/depthRender/*/*.png')])
-        
+        split = self.dataset_cfg.DATA_SPLIT[self.mode]
+        self.set_split(split, False)
         self.ubc3v_infos = []
         self.include_data(self.mode)
 
     def include_data(self, mode):
         self.logger.info('Loading UBC3V dataset.')
         ubc3v_infos = []
-
         for info_path in self.dataset_cfg.INFO_PATH[mode]:
             info_path = self.root_path / info_path
             if not info_path.exists():
@@ -46,6 +45,7 @@ class UBC3VDataset(DatasetTemplate):
                 infos = pickle.load(f)
                 ubc3v_infos.extend(infos)
 
+        ubc3v_infos = ubc3v_infos[::self.dataset_cfg.get('DATA_STEP')]
         self.ubc3v_infos.extend(ubc3v_infos)
         self.logger.info('Total samples for UBC3V dataset: %d' % (len(ubc3v_infos)))
 
@@ -71,16 +71,18 @@ class UBC3VDataset(DatasetTemplate):
         point_features = get_points(anno, mapper)
         return point_features[:, :3]
 
-    def set_split(self, split):
-        super().__init__(
-            dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training,
-            root_path=self.root_path, logger=self.logger
-        )
+    def set_split(self, split, call=True):
+        if call:
+            super().__init__(
+                dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training,
+                root_path=self.root_path, logger=self.logger
+            )
+        
         self.split = split
-
-        split_dir = self.root_path / self.split
+        split_dir = self.root_path / (self.split+'.txt')
         assert split_dir.exists()
-        self.sample_id_list = sorted([UBC3VDataset.frame_filter(file) for file in split_dir.glob('*/images/depthRender/*/*.png')])
+        #self.sample_id_list = sorted([UBC3VDataset.frame_filter(file) for file in split_dir.glob('*/images/depthRender/*/*.png')])
+        self.sample_id_list = [x.strip() for x in open(split_dir).readlines()]
 
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
@@ -282,11 +284,10 @@ def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4
 
 if __name__ == '__main__':
     import sys
+    import yaml
+    from pathlib import Path
+    from easydict import EasyDict
     if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
-        import yaml
-        from pathlib import Path
-        from easydict import EasyDict
-    
         dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         create_ubc3v_infos(
@@ -294,4 +295,12 @@ if __name__ == '__main__':
         class_names=['Pedestrian'],
         data_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
         save_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+        )
+    else:
+        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
+        dataset_cfg = EasyDict(yaml.safe_load(open(ROOT_DIR / 'tools/cfgs/dataset_configs/ubc3v_dataset.yaml')))
+        dataset = UBC3VDataset(
+            dataset_cfg=dataset_cfg, class_names=['Pedestrian'], 
+            root_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+            training=False, logger=common_utils.create_logger()
         )
