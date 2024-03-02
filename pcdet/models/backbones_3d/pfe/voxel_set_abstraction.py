@@ -263,7 +263,7 @@ class VoxelSetAbstraction(nn.Module):
 
                 keypoints = sampled_points[0][cur_pt_idxs[0]].unsqueeze(dim=0)
                 
-                if self.model_cfg.SAMPLE_COLORS:
+                if self.model_cfg.get('SAMPLE_COLORS'):
                     sampled_colors = batch_dict['voxel_labels'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
                     colors_list.append(sampled_colors)
 
@@ -283,7 +283,7 @@ class VoxelSetAbstraction(nn.Module):
             batch_idx = torch.arange(batch_size, device=keypoints.device).view(-1, 1).repeat(1, keypoints.shape[1]).view(-1, 1)
             keypoints = torch.cat((batch_idx.float(), keypoints.view(-1, 3)), dim=1)
         
-        if self.model_cfg.SAMPLE_COLORS:
+        if self.model_cfg.get('SAMPLE_COLORS'):
             colors = torch.cat(colors_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
             batch_dict['point_part_labels'] = colors
 

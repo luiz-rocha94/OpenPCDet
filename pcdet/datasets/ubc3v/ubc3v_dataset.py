@@ -62,6 +62,7 @@ class UBC3VDataset(DatasetTemplate):
 
     def get_lidar(self, idx):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
+        point_features[:, 2] -= point_features[:, 2].min() + 3 
         return point_features
 
     def set_split(self, split, call=True):

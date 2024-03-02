@@ -47,7 +47,7 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     vis.create_window()
 
     vis.get_render_option().point_size = 2.0
-    vis.get_render_option().background_color = np.ones(3)
+    vis.get_render_option().background_color = np.zeros(3)
 
     # draw origin
     if draw_origin:

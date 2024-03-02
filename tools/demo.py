@@ -47,7 +47,7 @@ class DemoDataset(DatasetTemplate):
         if self.ext == '.bin':
             points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
         elif self.ext == '.npy':
-            points = np.load(self.sample_file_list[index])
+            points = np.load(self.sample_file_list[index])[:, [0, 1, 2, -1]]
         else:
             raise NotImplementedError
 
@@ -80,11 +80,19 @@ def main():
     args, cfg = parse_config()
     logger = common_utils.create_logger()
     logger.info('-----------------Quick Demo of OpenPCDet-------------------------')
+    """
+    demo_dataset = DemoDataset(
+        dataset_cfg=cfg.DATA_CONFIG, class_names=cfg.CLASS_NAMES, training=False,
+        root_path=Path(args.data_path), ext=args.ext, logger=logger
+    )
+    #"""
+    #"""
     demo_dataset, demo_loader, sampler = build_dataloader(
         dataset_cfg=cfg.DATA_CONFIG,
         class_names=cfg.CLASS_NAMES,
         batch_size=1, dist=False, logger=logger, training=False
     )
+    #"""
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
@@ -99,8 +107,8 @@ def main():
             pred_dicts, _ = model.forward(data_dict)
 
             V.draw_scenes(
-                #points=data_dict['points'][:, 1:4], point_colors=data_dict['points'][:, 4:7],
-                points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
+                points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
+                #points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
                 ref_boxes=pred_dicts[0]['pred_boxes'], ref_scores=pred_dicts[0]['pred_scores'], 
                 ref_labels=pred_dicts[0]['pred_labels'], 
             )
