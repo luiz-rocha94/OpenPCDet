@@ -1,6 +1,5 @@
 DATASET: 'UBC3VDataset'
-DATA_PATH: '../data/ubc3v/easy-pose'
-DATA_STEP: 12
+DATA_PATH: 'C:/Users/rocha/Documentos/data/pose'
 
 POINT_CLOUD_RANGE: [-8, -8, -2, 8, 8, 2]
 
@@ -24,8 +23,8 @@ FOV_POINTS_ONLY: False
 
 POINT_FEATURE_ENCODING: {
     encoding_type: absolute_coordinates_encoding,
-    used_feature_list: ['x', 'y', 'z'],
-    src_feature_list: ['x', 'y', 'z'],
+    used_feature_list: ['x', 'y', 'z', 'intensity'],
+    src_feature_list: ['x', 'y', 'z', 'intensity'],
 }
 
 DATA_AUGMENTOR:

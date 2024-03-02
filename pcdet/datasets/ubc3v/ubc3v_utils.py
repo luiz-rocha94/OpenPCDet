@@ -28,7 +28,8 @@ def get_annos(sequence_path, cams=[], name='*.png'):
         annos[cam] = [{'rotation': x['rotate'].flat[0].squeeze().astype(np.float32), 
                        'translation': x['translate'].flat[0].squeeze().astype(np.float32),
                        'depth_file': str(depth_files[i]),
-                       'class_file': str(class_files[i])} 
+                       'class_file': str(class_files[i]),
+                       'idx': frame_filter(depth_files[i])} 
                        for i, x in enumerate(frames)]
     
     posture = gt_data['joints'].squeeze()[start:stop]
@@ -181,6 +182,45 @@ def draw_point_cloud(points, labels, joints, box3d):
     o3d.visualization.draw_geometries(geometries)
 
 
+frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-2]+x.parts[-1])))
+
+
+def map_files(subset_path, save_path, num_workers=4):
+    import concurrent.futures as futures
+    mapper = get_mapper(subset_path)
+    
+    def process_single_scene(sequence_path):
+        split = sequence_path.parts[-2]
+        print('%s sequence: %s' % (split, sequence_path.name))
+        cams = ['Cam3']
+        annos = get_annos(sequence_path, cams)
+        sample_id_list = []
+        for anno in annos:
+            for cam in cams:
+                cam_anno = anno[cam]
+                points = get_points(cam_anno, mapper)
+                sample_idx = cam_anno['idx']
+                points_file = save_path / split / '{}.npy'.format(sample_idx)
+                np.save(points_file, points)
+                sample_id_list.append(sample_idx)
+        return sample_id_list
+    
+    for split in ['train', 'test', 'valid']:
+        split_path = subset_path / split
+        (save_path / split).mkdir(exist_ok=True)
+        sequences = sorted(split_path.glob('*'), key=lambda x: int(x.name))
+        with futures.ThreadPoolExecutor(num_workers) as executor:
+            sequence_id_list = executor.map(process_single_scene, sequences)
+        
+        id_list = []
+        for sample_id_list in sequence_id_list:
+            id_list.extend(sample_id_list)    
+        
+        id_list = sorted(id_list)
+        with open(save_path / (split+'.txt'), 'w') as f:
+            f.writelines('\n'.join(map(str, id_list)))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--base_path', type=str, default='D:/mestrado/OpenPCDet/data/ubc3v')
@@ -191,13 +231,13 @@ if __name__ == '__main__':
     parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
     args = parser.parse_args()
     
+    subset_path = Path(args.base_path) / args.subset_path
+    save_path = Path(args.base_path) / 'pose'
     sequence_path = Path(args.base_path) / args.subset_path / args.split_path / args.sequence_path
     mapper = get_mapper(Path(args.base_path) / args.subset_path)
     anno = get_annos(sequence_path, [args.cam], args.frame)[0]
     anno.update(anno.pop(args.cam))
-    #labels = get_labels(anno)
     points = get_points(anno, mapper)
-    #joints = get_joints(anno)
     joints = anno['Posture']
     box3d = anno['BBox3D']
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)

@@ -14,9 +14,7 @@ except:
     from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
 
 
-class UBC3VDataset(DatasetTemplate):
-    frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-2]+x.parts[-1])))
-    
+class UBC3VDataset(DatasetTemplate):    
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
         """
         Args:
@@ -45,31 +43,25 @@ class UBC3VDataset(DatasetTemplate):
                 infos = pickle.load(f)
                 ubc3v_infos.extend(infos)
 
-        ubc3v_infos = ubc3v_infos[::self.dataset_cfg.get('DATA_STEP')]
         self.ubc3v_infos.extend(ubc3v_infos)
         self.logger.info('Total samples for UBC3V dataset: %d' % (len(ubc3v_infos)))
 
     def get_anno(self, idx):
-        name = 'mayaProject.{}.png'.format(str(idx)[-6:])
-        cams = ['Cam{}'.format(str(idx)[-7])]
-        sequence_path = self.root_path / self.split / str(idx)[:-7]
+        idx = str(idx)
+        name = 'mayaProject.{}.png'.format(idx[-6:])
+        cams = ['Cam{}'.format(idx[-7])]
+        sequence_path = self.root_path / self.split / idx[:-7]
         anno = get_annos(sequence_path, cams, name)[0]
         anno.update(anno.pop(cams[0]))
         return anno
 
     def get_label(self, idx):
-        anno = self.get_anno(idx)
-        #joints = get_joints(anno)
-        bbox = anno['BBox3D'].reshape((1,-1))
-        gt_boxes = bbox[:, :7]
-        gt_names = np.array(['Pedestrian'])[bbox[:, 7].astype(np.int32)].reshape((1,-1))
-        return gt_boxes, gt_names
+        point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
+        return point_features[:, [3, 4, 5, 6]]
 
     def get_lidar(self, idx):
-        anno = self.get_anno(idx)
-        mapper = get_mapper(self.root_path)
-        point_features = get_points(anno, mapper)
-        return point_features[:, :3]
+        point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
+        return point_features[:, [0, 1, 2, 6]]
 
     def set_split(self, split, call=True):
         if call:
@@ -150,18 +142,19 @@ class UBC3VDataset(DatasetTemplate):
 
         def process_single_scene(sequence_path):
             print('%s sequence: %s' % (self.split, sequence_path.name))
-            annos = get_annos(sequence_path)
+            cams = ['Cam3']
+            annos = get_annos(sequence_path, cams)
             infos = []
             for anno in annos:
-                cams = [key for key in anno if 'Cam' in key]
                 for cam in cams:
                     info = {}
-                    sample_idx = UBC3VDataset.frame_filter(Path(anno[cam]['depth_file']))
+                    sample_idx = anno[cam]['idx']
                     pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
                     info['point_cloud'] = pc_info
         
                     if has_label:
                         annotations = {}
+                        annotations['pose'] = np.array(anno['Posture']).reshape((1, -1))
                         annotations['name'] = np.array(anno['Label']).reshape((1, -1))
                         annotations['gt_boxes_lidar'] = np.array(anno['BBox3D']).reshape((1, -1))
                         info['annos'] = annotations
@@ -169,14 +162,15 @@ class UBC3VDataset(DatasetTemplate):
 
             return infos
 
-        split_dir = self.root_path / self.split
-        sample_id_list = sorted(split_dir.glob('*'), key=lambda x: int(x.name))
+        split_path = self.root_path / self.split
+        sequences = sorted(split_path.glob('*'), key=lambda x: int(x.name))
         
         # create a thread pool to improve the velocity
         with futures.ThreadPoolExecutor(num_workers) as executor:
-            sequences = executor.map(process_single_scene, sample_id_list)
+            sequence_info_list = executor.map(process_single_scene, sequences)
+        
         infos = []
-        for info in sequences:
+        for info in sequence_info_list:
             infos.extend(info)       
         return infos
 
@@ -294,13 +288,13 @@ if __name__ == '__main__':
         dataset_cfg=dataset_cfg,
         class_names=['Pedestrian'],
         data_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
-        save_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+        save_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
         )
     else:
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         dataset_cfg = EasyDict(yaml.safe_load(open(ROOT_DIR / 'tools/cfgs/dataset_configs/ubc3v_dataset.yaml')))
         dataset = UBC3VDataset(
             dataset_cfg=dataset_cfg, class_names=['Pedestrian'], 
-            root_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+            root_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
             training=False, logger=common_utils.create_logger()
         )
