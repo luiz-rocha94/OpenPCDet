@@ -247,6 +247,7 @@ class VoxelSetAbstraction(nn.Module):
         else:
             raise NotImplementedError
         keypoints_list = []
+        colors_list = []
         for bs_idx in range(batch_size):
             bs_mask = (batch_indices == bs_idx)
             sampled_points = src_points[bs_mask].unsqueeze(dim=0)  # (1, N, 3)
@@ -261,6 +262,10 @@ class VoxelSetAbstraction(nn.Module):
                     cur_pt_idxs[0] = non_empty.repeat(times)[:self.model_cfg.NUM_KEYPOINTS]
 
                 keypoints = sampled_points[0][cur_pt_idxs[0]].unsqueeze(dim=0)
+                
+                if self.model_cfg.SAMPLE_COLORS:
+                    sampled_colors = batch_dict['voxel_labels'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    colors_list.append(sampled_colors)
 
             elif self.model_cfg.SAMPLE_METHOD == 'SPC':
                 cur_keypoints = self.sectorized_proposal_centric_sampling(
@@ -277,6 +282,10 @@ class VoxelSetAbstraction(nn.Module):
         if len(keypoints.shape) == 3:
             batch_idx = torch.arange(batch_size, device=keypoints.device).view(-1, 1).repeat(1, keypoints.shape[1]).view(-1, 1)
             keypoints = torch.cat((batch_idx.float(), keypoints.view(-1, 3)), dim=1)
+        
+        if self.model_cfg.SAMPLE_COLORS:
+            colors = torch.cat(colors_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
+            batch_dict['point_part_labels'] = colors
 
         return keypoints
 

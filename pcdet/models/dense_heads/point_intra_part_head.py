@@ -60,8 +60,11 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         targets_dict = self.assign_stack_targets(
             points=point_coords, gt_boxes=gt_boxes, extend_gt_boxes=extend_gt_boxes,
             set_ignore_flag=True, use_ball_constraint=False,
-            ret_part_labels=True, ret_box_labels=(self.box_layers is not None)
+            ret_part_labels=not self.model_cfg.TARGET_CONFIG.LABELS, ret_box_labels=(self.box_layers is not None)
         )
+        
+        if self.model_cfg.TARGET_CONFIG.LABELS:
+            targets_dict['point_part_labels'] = input_dict['point_part_labels']
 
         return targets_dict
 
