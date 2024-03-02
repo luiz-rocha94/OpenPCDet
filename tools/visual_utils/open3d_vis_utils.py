@@ -46,12 +46,12 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     vis = open3d.visualization.Visualizer()
     vis.create_window()
 
-    vis.get_render_option().point_size = 1.0
-    vis.get_render_option().background_color = np.zeros(3)
+    vis.get_render_option().point_size = 2.0
+    vis.get_render_option().background_color = np.ones(3)
 
     # draw origin
     if draw_origin:
-        axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+        axis_pcd = open3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
         vis.add_geometry(axis_pcd)
 
     pts = open3d.geometry.PointCloud()
@@ -61,6 +61,8 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     if point_colors is None:
         pts.colors = open3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
     else:
+        if isinstance(point_colors, torch.Tensor):
+            point_colors = point_colors.cpu().numpy()
         pts.colors = open3d.utility.Vector3dVector(point_colors)
 
     if gt_boxes is not None:

@@ -31,6 +31,7 @@ class UBC3VDataset(DatasetTemplate):
         self.set_split(split, False)
         self.ubc3v_infos = []
         self.include_data(self.mode)
+        self.map_class_to_kitti = self.dataset_cfg.MAP_CLASS_TO_KITTI
 
     def include_data(self, mode):
         self.logger.info('Loading UBC3V dataset.')
