@@ -11,7 +11,7 @@ except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
+    from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper, draw_point_cloud
 
 
 class UBC3VDataset(DatasetTemplate):    
@@ -53,17 +53,26 @@ class UBC3VDataset(DatasetTemplate):
         cams = ['Cam{}'.format(idx[-7])]
         sequence_path = self.root_path / self.split / idx[:-7]
         anno = get_annos(sequence_path, cams, name)[0]
-        anno.update(anno.pop(cams[0]))
         return anno
+    
+    def draw(self, index):
+        info = copy.deepcopy(self.ubc3v_infos[index])
+        sample_idx = info['point_cloud']['lidar_idx']
+        points = self.get_lidar(sample_idx)
+        draw_point_cloud(points[:, :3], points[:, 3:], info['annos']['pose'][0], info['annos']['gt_boxes_lidar'][0])
+        
 
     def get_label(self, idx):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
         return point_features[:, [3, 4, 5, 6]]
 
-    def get_lidar(self, idx):
+    def get_lidar(self, idx, z_offset=True):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
-        point_features[:, 2] -= point_features[:, 2].min() + 3 
-        return point_features
+        offset = point_features[:, 2].min() + 3
+        if z_offset:
+            point_features[:, 2] -= offset 
+            return point_features
+        return point_features, offset
 
     def set_split(self, split, call=True):
         if call:
@@ -155,16 +164,25 @@ class UBC3VDataset(DatasetTemplate):
                     info['point_cloud'] = pc_info
         
                     if has_label:
+                        points, z_offset = self.get_lidar(sample_idx, False)
+                        points[:, 2] -= z_offset 
+                        whl = (points.max(0) - points.min(0)).reshape((1, -1))
                         annotations = {}
-                        annotations['pose'] = np.array(anno['Posture']).reshape((1, -1))
-                        annotations['name'] = np.array(anno['Label']).reshape((1, -1))
-                        annotations['gt_boxes_lidar'] = np.array(anno['BBox3D']).reshape((1, -1))
+                        pose = np.array(anno['Posture']).reshape((-1, 18, 3))
+                        pose[:, 2] -= z_offset
+                        name = np.array(anno['Label']).reshape((-1, 1))
+                        gt_boxes_lidar = np.array(anno['BBox3D']).reshape((-1, 7))
+                        gt_boxes_lidar[:, 2] -= z_offset
+                        gt_boxes_lidar[:, 3:6] = whl[:, :3]
+                        annotations['pose'] = pose
+                        annotations['name'] = name
+                        annotations['gt_boxes_lidar'] = gt_boxes_lidar
                         info['annos'] = annotations
                     infos.append(info)
 
             return infos
 
-        split_path = self.root_path / self.split
+        split_path = self.root_path.parent / self.dataset_cfg.DATA_SRC / self.split
         sequences = sorted(split_path.glob('*'), key=lambda x: int(x.name))
         
         # create a thread pool to improve the velocity
@@ -289,7 +307,7 @@ if __name__ == '__main__':
         create_ubc3v_infos(
         dataset_cfg=dataset_cfg,
         class_names=['Pedestrian'],
-        data_path=ROOT_DIR / 'data' / 'ubc3v' / 'easy-pose',
+        data_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
         save_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
         )
     else:

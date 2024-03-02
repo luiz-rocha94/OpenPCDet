@@ -107,8 +107,8 @@ def main():
             pred_dicts, _ = model.forward(data_dict)
 
             V.draw_scenes(
-                points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
-                #points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
+                #points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
+                points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
                 ref_boxes=pred_dicts[0]['pred_boxes'], ref_scores=pred_dicts[0]['pred_scores'], 
                 ref_labels=pred_dicts[0]['pred_labels'], 
             )

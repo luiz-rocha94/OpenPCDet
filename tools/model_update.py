@@ -30,4 +30,4 @@ model.load_params_from_file(filename=second_ckpt, logger=dataset.logger)
 model.cuda()
 model.eval()
 
-save_checkpoint(checkpoint_state(model), model_ckpt.with_suffix(''))
+save_checkpoint(checkpoint_state(model, epoch=0, it=0), model_ckpt.with_suffix(''))
