@@ -44,7 +44,7 @@ class UBC3VDataset(DatasetTemplate):
                 infos = pickle.load(f)
                 ubc3v_infos.extend(infos)
 
-        self.ubc3v_infos.extend(ubc3v_infos[:32])
+        self.ubc3v_infos.extend(ubc3v_infos)
         self.logger.info('Total samples for UBC3V dataset: %d' % (len(ubc3v_infos)))
 
     def get_anno(self, idx):
