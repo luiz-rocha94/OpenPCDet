@@ -66,7 +66,7 @@ def parse_config():
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='cfgs/ubc3v_models/vps_pose.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='cfgs/ubc3v_models/vps_pose_latest.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -109,8 +109,7 @@ def main():
             V.draw_scenes(
                 #points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
                 points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
-                ref_boxes=pred_dicts[0]['pred_boxes'], ref_scores=pred_dicts[0]['pred_scores'], 
-                ref_labels=pred_dicts[0]['pred_labels'], 
+                ref_boxes=pred_dicts[0]['pred_boxes'], gt_boxes=data_dict['gt_boxes'][0]
             )
 
             if not OPEN3D_FLAG:

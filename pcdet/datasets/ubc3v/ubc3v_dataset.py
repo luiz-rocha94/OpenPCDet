@@ -6,12 +6,12 @@ try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
-    from .ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper
+    from .ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, get_color_map
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from ubc3v_utils import get_annos, get_joints_name, get_points, get_mapper, draw_point_cloud
+    from ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, get_color_map
 
 
 class UBC3VDataset(DatasetTemplate):    
@@ -60,7 +60,6 @@ class UBC3VDataset(DatasetTemplate):
         sample_idx = info['point_cloud']['lidar_idx']
         points = self.get_lidar(sample_idx)
         draw_point_cloud(points[:, :3], points[:, 3:], info['annos']['pose'][0], info['annos']['gt_boxes_lidar'][0])
-        
 
     def get_label(self, idx):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
@@ -68,10 +67,12 @@ class UBC3VDataset(DatasetTemplate):
 
     def get_lidar(self, idx, z_offset=True):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
+        point_features[:, 3:6] = get_color_map(point_features[:, 3:6])
         offset = point_features[:, 2].min() + 3
         if z_offset:
             point_features[:, 2] -= offset 
             return point_features
+        
         return point_features, offset
 
     def set_split(self, split, call=True):

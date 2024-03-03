@@ -7,6 +7,8 @@ from PIL import Image
 from scipy.io import loadmat
 import open3d as o3d
 import matplotlib.pyplot as plt
+from matplotlib import cm
+from sklearn.metrics import pairwise_distances
 
 
 def get_annos(sequence_path, cams=[], name='*.png'):
@@ -64,24 +66,28 @@ def get_mapper(base_path):
 
 
 def get_points(anno, mapper):
-    depth_file  = anno['depth_file']
-    class_file  = anno['class_file']
+    depth_file  = Path(anno['depth_file'])
+    class_file  = Path(anno['class_file'])
     translation = anno['translation']
     rotation    = anno['rotation']
-    x_map, y_map = mapper[..., 0], mapper[..., 1]
+    x_map, y_map = mapper[..., 0].reshape(-1), mapper[..., 1].reshape(-1)
+    
+    points = np.zeros((0, 3), dtype=np.float32)
+    labels = np.zeros((0, 4), dtype=np.float32)
     
     frame = np.array(Image.open(depth_file).convert('L'))
     colors = np.array(Image.open(class_file))
     mask = colors.sum(-1) != 0
     #plt.imshow(frame, cmap='gray'); plt.show()
     #plt.imshow(colors, cmap='gray'); plt.show()
-    y, x = frame.shape
+    mask = mask.reshape(-1)
+    frame = frame.reshape(-1)[mask]
+    colors = colors.reshape((-1, 4))[mask] 
     min_, max_ = 50, 800
     zz = 1.03 * ((max_ - min_) * (frame / 255) + min_).astype(np.float32)
-    xx, yy = x_map*zz, y_map*zz 
-    points = np.stack([xx, yy, zz], axis=-1)
-    points = points[mask].reshape((-1, 3))
-    labels = (colors[mask] / 255).reshape((-1, 4)).astype(np.float32)
+    xx, yy = x_map[mask]*zz, y_map[mask]*zz 
+    points = np.concatenate([points, np.stack([xx, yy, zz], axis=-1)])
+    labels = np.concatenate([labels, (colors / 255).astype(np.float32)])
     
     rotyx = rotation[0]
     if rotyx > 0:
@@ -109,7 +115,7 @@ def get_points(anno, mapper):
     return points    
 
 
-def get_color_map(width=450, height=50, channels=3):
+def get_color_map(colors):
     color_map = np.array([[255, 106,   0], 
                           [255,   0,   0],
                           [255, 178, 127],
@@ -156,14 +162,34 @@ def get_color_map(width=450, height=50, channels=3):
                           [127,  63,  63],
                           [127, 116,  63]], np.uint8)
     
-    scale = width / len(color_map)
-    rows, cols = np.mgrid[:width, :channels]
-    rows = (rows/scale).astype(np.int32).reshape(-1)
-    cols = cols.reshape(-1)
-    image = color_map[np.newaxis, rows, cols].reshape((1, -1, 3))
-    image = np.repeat(image, height, 0)
-    plt.imshow(image); plt.show()
-    return color_map
+    colors_dict = OrderedDict()
+    colors_dict['left_arm'] = [11, 14, 34, 35, 36, 37, 29]
+    colors_dict['right_arm'] = [12, 13, 30, 31, 32, 33, 28]
+    colors_dict['left_leg'] = [7, 19, 21, 23, 25, 27]
+    colors_dict['right_leg'] = [5, 18, 20, 22, 24, 26]
+    colors_dict['head'] = [38, 39, 40, 41, 42, 43, 44]
+    colors_dict['torso'] = [10, 16, 17, 8, 9, 15, 0, 1, 4, 6, 2, 3]
+    
+    colors_list = []
+    [colors_list.extend(list(x)) for x in colors_dict.values()]
+    
+    color_map = color_map[colors_list]
+    color_map = (color_map / 255).astype(np.float32)
+    distances = pairwise_distances(colors, color_map)
+    idx = np.argmin(distances, 1)
+    lens = [len(x) for x in colors_dict.values()]
+    lens[4] += lens.pop()
+    
+    color_space = np.zeros(0, dtype=np.float32)
+    for i, len_i in enumerate(lens):
+        endpoint = False if i < 4 else True
+        color_space = np.concatenate([color_space, 
+                                      np.linspace(0.2*i, 0.2*(i+1), len_i, dtype=np.float32, endpoint=endpoint)])
+    
+    cmap = cm.ScalarMappable(cmap='gist_rainbow')
+    new_color_map = cmap.to_rgba(color_space)[:, :3]
+    colors = new_color_map[idx]
+    return colors
         
 
 def get_joints_name():
@@ -233,10 +259,9 @@ def draw_point_cloud(points, labels, joints, box3d):
     line_set.paint_uniform_color([255, 0, 0])
     geometries.append(line_set)    
     
-    
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
-    o3d.visualization.draw_geometries(geometries)
+    o3d.visualization.draw_geometries(geometries, width=1080, height=1080, lookat=center, up=[0,0,1], front=[0,1,0], zoom=0.6)
 
 
 frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-2]+x.parts[-1])))
@@ -285,7 +310,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000006.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path
@@ -298,4 +323,6 @@ if __name__ == '__main__':
     joints = anno['Posture']
     box3d = anno['BBox3D']
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    draw_point_cloud(points[:, :3], points[:, 3:], joints, box3d)
+    #colors = points[:, 3:6]
+    colors = get_color_map(points[:, 3:6])
+    draw_point_cloud(points[:, :3], colors, joints, box3d)
