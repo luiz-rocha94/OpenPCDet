@@ -37,6 +37,7 @@ class VPSPose(Detector3DTemplate):
     def post_processing(self, batch_dict):
         import torch
         from ..model_utils import model_nms_utils
+        from ..model_utils import vps_pose_utils
         """
         Args:
             batch_dict:
@@ -145,7 +146,9 @@ class VPSPose(Detector3DTemplate):
                 bs_mask = (batch_dict['point_coords'][:, 0] == index)
                 point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
                 point_part_offset = batch_dict['point_part_offset'][bs_mask]
-                points = torch.cat((point_coords, point_part_offset), dim=1)
+                point_part_labels = batch_dict['point_part_labels'][bs_mask]
+                coef_pearson = vps_pose_utils.pearson(point_part_labels, point_part_offset)
+                points = torch.cat((point_coords, point_part_offset, coef_pearson), dim=1)
                 record_dict.update({'part_segmentation': points})
 
             pred_dicts.append(record_dict)

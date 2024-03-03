@@ -6,12 +6,12 @@ try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
-    from .ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, get_color_map
+    from .ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, get_color_map
+    from ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map
 
 
 class UBC3VDataset(DatasetTemplate):    
@@ -67,7 +67,7 @@ class UBC3VDataset(DatasetTemplate):
 
     def get_lidar(self, idx, z_offset=True):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
-        point_features[:, 3:6] = get_color_map(point_features[:, 3:6])
+        point_features[:, 3:6] = apply_color_map(point_features[:, 3:6])
         offset = point_features[:, 2].min() + 3
         if z_offset:
             point_features[:, 2] -= offset 
@@ -119,6 +119,55 @@ class UBC3VDataset(DatasetTemplate):
         data_dict = self.prepare_data(data_dict=input_dict)
 
         return data_dict
+    
+    def generate_prediction_dicts(self, batch_dict, pred_dicts, class_names, output_path=None):
+        """
+        Args:
+            batch_dict:
+                frame_id:
+            pred_dicts: list of pred_dicts
+                pred_boxes: (N, 7 or 9), Tensor
+                pred_scores: (N), Tensor
+                pred_labels: (N), Tensor
+            class_names:
+            output_path:
+
+        Returns:
+
+        """
+        
+        def get_template_prediction(num_samples):
+            box_dim = 9 if self.dataset_cfg.get('TRAIN_WITH_SPEED', False) else 7
+            ret_dict = {
+                'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
+                'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples)
+            }
+            return ret_dict
+
+        def generate_single_sample_dict(box_dict):
+            pred_scores = box_dict['pred_scores'].cpu().numpy()
+            pred_boxes = box_dict['pred_boxes'].cpu().numpy()
+            pred_labels = box_dict['pred_labels'].cpu().numpy()
+            pred_dict = get_template_prediction(pred_scores.shape[0])
+            if pred_scores.shape[0] == 0:
+                return pred_dict
+
+            pred_dict['name'] = np.array(class_names)[pred_labels - 1]
+            pred_dict['score'] = pred_scores
+            pred_dict['boxes_lidar'] = pred_boxes
+            pred_dict['pred_labels'] = pred_labels
+
+            return pred_dict
+
+        annos = []
+        for index, box_dict in enumerate(pred_dicts):
+            single_pred_dict = generate_single_sample_dict(box_dict)
+            single_pred_dict['frame_id'] = batch_dict['frame_id'][index]
+            if 'metadata' in batch_dict:
+                single_pred_dict['metadata'] = batch_dict['metadata'][index]
+            annos.append(single_pred_dict)
+
+        return annos
 
     def evaluation(self, det_annos, class_names, **kwargs):
         if 'annos' not in self.ubc3v_infos[0].keys():

@@ -63,6 +63,8 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     else:
         if isinstance(point_colors, torch.Tensor):
             point_colors = point_colors.cpu().numpy()
+        if point_colors.shape[1] == 4:
+            point_colors = point_colors[:, :3] * point_colors[:, 3, np.newaxis]
         pts.colors = open3d.utility.Vector3dVector(point_colors)
 
     if gt_boxes is not None:

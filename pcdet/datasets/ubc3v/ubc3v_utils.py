@@ -115,52 +115,52 @@ def get_points(anno, mapper):
     return points    
 
 
-def get_color_map(colors):
-    color_map = np.array([[255, 106,   0], 
-                          [255,   0,   0],
-                          [255, 178, 127],
-                          [255, 127, 127],
-                          [182, 255,   0],
-                          [218, 255, 127],
-                          [255, 216,   0],
-                          [255, 233, 127],
-                          [  0, 148, 255],
-                          [ 72,   0, 255],
-                          [ 48,  48,  48],
-                          [ 76, 255,   0],
-                          [  0, 255,  33],
-                          [  0, 255, 255],
-                          [  0, 255, 144],
-                          [178,   0, 255],
-                          [127, 116,  63],
-                          [127,  63,  63],
-                          [127, 201, 255],
-                          [127, 255, 255],
-                          [165, 255, 127],
-                          [127, 255, 197],
-                          [214, 127, 255],
-                          [161, 127, 255],
-                          [107,  63, 127],
-                          [ 63,  73, 127],
-                          [ 63, 127, 127],
-                          [109, 127,  63],
-                          [255, 127, 237],
-                          [127,  63, 118],
-                          [  0,  74, 127],
-                          [255,   0, 110],
-                          [  0, 127,  70],
-                          [127,   0,   0],
-                          [ 33,   0, 127],
-                          [127,   0,  55],
-                          [ 38, 127,   0],
-                          [127,  51,   0],
-                          [ 64,  64,  64],
-                          [ 73,  73,  73],
-                          [  0,   0,   0],
-                          [191, 168, 247],
-                          [192, 192, 192],
-                          [127,  63,  63],
-                          [127, 116,  63]], np.uint8)
+def get_color_maps(cmap='gist_rainbow', plot=False):
+    src_map = np.array([[255, 106,   0], 
+                        [255,   0,   0],
+                        [255, 178, 127],
+                        [255, 127, 127],
+                        [182, 255,   0],
+                        [218, 255, 127],
+                        [255, 216,   0],
+                        [255, 233, 127],
+                        [  0, 148, 255],
+                        [ 72,   0, 255],
+                        [ 48,  48,  48],
+                        [ 76, 255,   0],
+                        [  0, 255,  33],
+                        [  0, 255, 255],
+                        [  0, 255, 144],
+                        [178,   0, 255],
+                        [127, 116,  63],
+                        [127,  63,  63],
+                        [127, 201, 255],
+                        [127, 255, 255],
+                        [165, 255, 127],
+                        [127, 255, 197],
+                        [214, 127, 255],
+                        [161, 127, 255],
+                        [107,  63, 127],
+                        [ 63,  73, 127],
+                        [ 63, 127, 127],
+                        [109, 127,  63],
+                        [255, 127, 237],
+                        [127,  63, 118],
+                        [  0,  74, 127],
+                        [255,   0, 110],
+                        [  0, 127,  70],
+                        [127,   0,   0],
+                        [ 33,   0, 127],
+                        [127,   0,  55],
+                        [ 38, 127,   0],
+                        [127,  51,   0],
+                        [ 64,  64,  64],
+                        [ 73,  73,  73],
+                        [  0,   0,   0],
+                        [191, 168, 247],
+                        [192, 192, 192],
+                        [127,  63,  63],
+                        [127, 116,  63]], np.uint8)
     
     colors_dict = OrderedDict()
     colors_dict['left_arm'] = [11, 14, 34, 35, 36, 37, 29]
@@ -172,23 +172,39 @@ def get_color_map(colors):
     
     colors_list = []
     [colors_list.extend(list(x)) for x in colors_dict.values()]
+    src_map = src_map[colors_list]
+    src_map = (src_map / 255).astype(np.float32)
     
-    color_map = color_map[colors_list]
-    color_map = (color_map / 255).astype(np.float32)
-    distances = pairwise_distances(colors, color_map)
-    idx = np.argmin(distances, 1)
     lens = [len(x) for x in colors_dict.values()]
     lens[4] += lens.pop()
-    
     color_space = np.zeros(0, dtype=np.float32)
     for i, len_i in enumerate(lens):
         endpoint = False if i < 4 else True
         color_space = np.concatenate([color_space, 
                                       np.linspace(0.2*i, 0.2*(i+1), len_i, dtype=np.float32, endpoint=endpoint)])
+    cmap = cm.ScalarMappable(cmap=cmap)
+    dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
+    if plot:
+        width, height, channels = 450, 50, 3
+        scale = width / len(src_map)
+        rows, cols = np.mgrid[:width, :channels]
+        rows = (rows/scale).astype(np.int32).reshape(-1)
+        cols = cols.reshape(-1)
+        src_image = src_map[np.newaxis, rows, cols].reshape((1, -1, 3))
+        src_image = np.repeat(src_image, height, 0)
+        plt.imshow(src_image); plt.show()
+        dst_image = dst_map[np.newaxis, rows, cols].reshape((1, -1, 3))
+        dst_image = np.repeat(dst_image, height, 0)
+        plt.imshow(dst_image); plt.show()
     
-    cmap = cm.ScalarMappable(cmap='gist_rainbow')
-    new_color_map = cmap.to_rgba(color_space)[:, :3]
-    colors = new_color_map[idx]
+    return src_map, dst_map
+
+
+def apply_color_map(colors, **kwargs):
+    src_map, dst_map = get_color_maps(**kwargs)
+    distances = pairwise_distances(colors, src_map)
+    idx = np.argmin(distances, 1)
+    colors = dst_map[idx]
     return colors
         
 
@@ -324,5 +340,5 @@ if __name__ == '__main__':
     box3d = anno['BBox3D']
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
     #colors = points[:, 3:6]
-    colors = get_color_map(points[:, 3:6])
+    colors = apply_color_map(points[:, 3:6])
     draw_point_cloud(points[:, :3], colors, joints, box3d)
