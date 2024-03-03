@@ -44,7 +44,7 @@ class UBC3VDataset(DatasetTemplate):
                 infos = pickle.load(f)
                 ubc3v_infos.extend(infos)
 
-        self.ubc3v_infos.extend(ubc3v_infos)
+        self.ubc3v_infos.extend(ubc3v_infos[:32])
         self.logger.info('Total samples for UBC3V dataset: %d' % (len(ubc3v_infos)))
 
     def get_anno(self, idx):
@@ -140,7 +140,8 @@ class UBC3VDataset(DatasetTemplate):
             box_dim = 9 if self.dataset_cfg.get('TRAIN_WITH_SPEED', False) else 7
             ret_dict = {
                 'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
-                'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples)
+                'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples),
+                'pearson_scores': np.zeros(num_samples, np.float32)
             }
             return ret_dict
 
@@ -148,6 +149,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_scores = box_dict['pred_scores'].cpu().numpy()
             pred_boxes = box_dict['pred_boxes'].cpu().numpy()
             pred_labels = box_dict['pred_labels'].cpu().numpy()
+            pearson_scores = box_dict['pearson_scores'].cpu().numpy()
             pred_dict = get_template_prediction(pred_scores.shape[0])
             if pred_scores.shape[0] == 0:
                 return pred_dict
@@ -156,6 +158,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_dict['score'] = pred_scores
             pred_dict['boxes_lidar'] = pred_boxes
             pred_dict['pred_labels'] = pred_labels
+            pred_dict['pearson_scores'] = pearson_scores
 
             return pred_dict
 
@@ -182,7 +185,7 @@ class UBC3VDataset(DatasetTemplate):
                 eval_gt_annos, map_name_to_kitti=map_name_to_kitti,
                 info_with_fakelidar=self.dataset_cfg.get('INFO_WITH_FAKELIDAR', False)
             )
-            kitti_class_names = [map_name_to_kitti[x] for x in class_names]
+            kitti_class_names = [map_name_to_kitti[x] for x in map_name_to_kitti]
             ap_result_str, ap_dict = kitti_eval.get_official_eval_result(
                 gt_annos=eval_gt_annos, dt_annos=eval_det_annos, current_classes=kitti_class_names
             )
@@ -191,12 +194,21 @@ class UBC3VDataset(DatasetTemplate):
         eval_det_annos = copy.deepcopy(det_annos)
         eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.ubc3v_infos]
 
-        if kwargs['eval_metric'] == 'kitti':
-            ap_result_str, ap_dict = kitti_eval(eval_det_annos, eval_gt_annos, self.map_class_to_kitti)
-        else:
-            raise NotImplementedError
+        eval_metrics = kwargs['eval_metric'] if isinstance(kwargs['eval_metric'], list) else [kwargs['eval_metric']]
+        result_str, result_dict = '', {}
+        for eval_metric in eval_metrics:
+            if eval_metric == 'kitti':
+                ap_result_str, ap_dict = kitti_eval(eval_det_annos, eval_gt_annos, self.map_class_to_kitti)
+                result_str += ap_result_str 
+                result_dict.update(ap_dict)
+            elif eval_metric == 'pearson':
+                mean_pearson_scores = np.mean([anno['pearson_scores'].mean() for anno in eval_det_annos])
+                result_str += 'Pearson Coef: {:.3f}\n'.format(mean_pearson_scores)
+                result_dict.update({'pearson': mean_pearson_scores})
+            else:
+                raise NotImplementedError
 
-        return ap_result_str, ap_dict
+        return result_str, result_dict
 
     def get_infos(self, class_names, num_workers=4, has_label=True, sample_id_list=None, num_features=4):
         import concurrent.futures as futures
@@ -220,7 +232,7 @@ class UBC3VDataset(DatasetTemplate):
                         annotations = {}
                         pose = np.array(anno['Posture']).reshape((-1, 18, 3))
                         pose[:, 2] -= z_offset
-                        name = np.array(anno['Label']).reshape((-1, 1))
+                        name = np.array(anno['Label']).reshape(-1)
                         gt_boxes_lidar = np.array(anno['BBox3D']).reshape((-1, 7))
                         gt_boxes_lidar[:, 2] -= z_offset
                         gt_boxes_lidar[:, 3:6] = whl[:, :3]

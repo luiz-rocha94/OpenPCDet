@@ -142,14 +142,19 @@ class VPSPose(Detector3DTemplate):
                 'pred_labels': final_labels
             }
             
+            bs_mask = (batch_dict['point_coords'][:, 0] == index)
+            point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
+            point_part_offset = batch_dict['point_part_offset'][bs_mask]
+            point_part_labels = batch_dict['point_part_labels'][bs_mask]
+            pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
+            points = torch.cat((point_coords, point_part_offset, pearson_coef), dim=1)
+            pearson_scores = vps_pose_utils.pearson_in_boxes(points, final_boxes)               
+
             if post_process_cfg.OUTPUT_PART_SEGMENTATION:
-                bs_mask = (batch_dict['point_coords'][:, 0] == index)
-                point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
-                point_part_offset = batch_dict['point_part_offset'][bs_mask]
-                point_part_labels = batch_dict['point_part_labels'][bs_mask]
-                coef_pearson = vps_pose_utils.pearson(point_part_labels, point_part_offset)
-                points = torch.cat((point_coords, point_part_offset, coef_pearson), dim=1)
                 record_dict.update({'part_segmentation': points})
+            
+            if post_process_cfg.OUTPUT_PEARSON_SCORES:
+                record_dict.update({'pearson_scores': pearson_scores})                
 
             pred_dicts.append(record_dict)
 

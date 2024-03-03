@@ -140,9 +140,10 @@ MODEL:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
         SCORE_THRESH: 0.1
         OUTPUT_RAW_SCORE: False
-        OUTPUT_PART_SEGMENTATION: True
+        OUTPUT_PART_SEGMENTATION: False
+        OUTPUT_PEARSON_SCORES: True
 
-        EVAL_METRIC: kitti
+        EVAL_METRIC: [kitti, pearson]
 
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
