@@ -195,7 +195,7 @@ class UBC3VDataset(DatasetTemplate):
         eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.ubc3v_infos]
 
         eval_metrics = kwargs['eval_metric'] if isinstance(kwargs['eval_metric'], list) else [kwargs['eval_metric']]
-        result_str, result_dict = '', {}
+        result_str, result_dict = '\n', {}
         for eval_metric in eval_metrics:
             if eval_metric == 'kitti':
                 ap_result_str, ap_dict = kitti_eval(eval_det_annos, eval_gt_annos, self.map_class_to_kitti)

@@ -11,6 +11,7 @@ def pearson(x, y):
     y_norm = y - y_mean
     coef_pearson = torch.sum(x_norm * y_norm, 1) / (torch.sqrt(torch.sum(x_norm ** 2, 1)) * torch.sqrt(torch.sum(y_norm ** 2, 1)))
     coef_pearson = (coef_pearson + 1) / 2
+    torch.nan_to_num(coef_pearson, out=coef_pearson)
     return coef_pearson.unsqueeze(1)
 
 
@@ -41,5 +42,6 @@ def pearson_in_boxes(points, boxes):
         points = points.squeeze(0)
         boxes = boxes.squeeze(0)
     
+    torch.nan_to_num(pearson_box, out=pearson_box)
     return pearson_box.numpy() if is_numpy else pearson_box
         
