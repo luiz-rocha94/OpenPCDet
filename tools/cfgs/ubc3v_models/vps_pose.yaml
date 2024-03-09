@@ -9,7 +9,7 @@ MODEL:
 
     VFE:
         NAME: PartVFE
-        NUM_POINT_FEATURES: 4
+        NUM_POINT_FEATURES: [4, 7, 10]
 
     BACKBONE_3D:
         NAME: VoxelBackBone8x
@@ -92,6 +92,7 @@ MODEL:
         NUM_OUTPUT_FEATURES: 128
         SAMPLE_METHOD: FPS
         SAMPLE_COLORS: True
+        SAMPLE_NORMALS: True
 
         FEATURES_SOURCE: ['bev', 'x_conv1', 'x_conv2', 'x_conv3', 'x_conv4']
         SA_LAYER:
@@ -121,10 +122,12 @@ MODEL:
         CLS_FC: [128, 128]
         PART_FC: [128, 128]
         REG_FC: [128, 128]
+        NORM_FC: [128, 128]
         CLASS_AGNOSTIC: False
         USE_POINT_FEATURES_BEFORE_FUSION: False
         TARGET_CONFIG:
             LABELS: True
+            NORMALS: True
             GT_EXTRA_WIDTH: [0.2, 0.2, 0.2]
 
         LOSS_CONFIG:
@@ -133,6 +136,7 @@ MODEL:
                 'point_cls_weight': 1.0,
                 'point_box_weight': 1.0,
                 'point_part_weight': 1.0,
+                'point_normal_weight': 1.0,
                 'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             }
 
@@ -142,6 +146,7 @@ MODEL:
         OUTPUT_RAW_SCORE: False
         OUTPUT_PART_SEGMENTATION: True
         OUTPUT_PEARSON_SCORES: True
+        OUTPUT_NORMALS: True
 
         EVAL_METRIC: [kitti, pearson]
 

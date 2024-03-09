@@ -6,12 +6,12 @@ try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
-    from .ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map
+    from .ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map, get_normals
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map
+    from ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map, get_normals
 
 
 class UBC3VDataset(DatasetTemplate):    
@@ -61,19 +61,21 @@ class UBC3VDataset(DatasetTemplate):
         points = self.get_lidar(sample_idx)
         draw_point_cloud(points[:, :3], points[:, 3:], info['annos']['pose'][0], info['annos']['gt_boxes_lidar'][0])
 
-    def get_label(self, idx):
-        point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
-        return point_features[:, [3, 4, 5, 6]]
+    def get_label(self, point_features, joints):
+        normals = get_normals(point_features[:, 0:3], point_features[:, 3:6], joints)
+        return normals
 
-    def get_lidar(self, idx, z_offset=True):
+    def get_lidar(self, idx, channels=7, return_offset=False):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
-        point_features[:, 3:6] = apply_color_map(point_features[:, 3:6])
         offset = point_features[:, 2].min() + 3
-        if z_offset:
-            point_features[:, 2] -= offset 
-            return point_features
+        point_features[:, 2] -= offset 
+        if channels > 3:
+            point_features[:, 3:6] = apply_color_map(point_features[:, 3:6])
         
-        return point_features, offset
+        if return_offset:
+            return point_features[:, :channels], offset
+        
+        return point_features[:, :channels]
 
     def set_split(self, split, call=True):
         if call:
@@ -111,9 +113,11 @@ class UBC3VDataset(DatasetTemplate):
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
+            labels = self.get_label(points, annos['pose'][0])
             input_dict.update({
                 'gt_names': gt_names,
-                'gt_boxes': gt_boxes_lidar
+                'gt_boxes': gt_boxes_lidar,
+                'points': np.concatenate([points, labels], axis=1)
             })
 
         data_dict = self.prepare_data(data_dict=input_dict)
@@ -226,8 +230,7 @@ class UBC3VDataset(DatasetTemplate):
                     info['point_cloud'] = pc_info
         
                     if has_label:
-                        points, z_offset = self.get_lidar(sample_idx, False)
-                        points[:, 2] -= z_offset 
+                        points, z_offset = self.get_lidar(sample_idx, True)
                         whl = (points.max(0) - points.min(0)).reshape((1, -1))
                         annotations = {}
                         pose = np.array(anno['Posture']).reshape((-1, 18, 3))

@@ -248,6 +248,7 @@ class VoxelSetAbstraction(nn.Module):
             raise NotImplementedError
         keypoints_list = []
         colors_list = []
+        normals_list = []
         for bs_idx in range(batch_size):
             bs_mask = (batch_indices == bs_idx)
             sampled_points = src_points[bs_mask].unsqueeze(dim=0)  # (1, N, 3)
@@ -264,8 +265,12 @@ class VoxelSetAbstraction(nn.Module):
                 keypoints = sampled_points[0][cur_pt_idxs[0]].unsqueeze(dim=0)
                 
                 if self.model_cfg.get('SAMPLE_COLORS'):
-                    sampled_colors = batch_dict['voxel_labels'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    sampled_colors = batch_dict['voxel_colors'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
                     colors_list.append(sampled_colors)
+                
+                if self.model_cfg.get('SAMPLE_NORMALS'):
+                    sampled_normals = batch_dict['voxel_normals'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    normals_list.append(sampled_normals)
 
             elif self.model_cfg.SAMPLE_METHOD == 'SPC':
                 cur_keypoints = self.sectorized_proposal_centric_sampling(
@@ -286,6 +291,10 @@ class VoxelSetAbstraction(nn.Module):
         if self.model_cfg.get('SAMPLE_COLORS'):
             colors = torch.cat(colors_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
             batch_dict['point_part_labels'] = colors
+        
+        if self.model_cfg.get('SAMPLE_NORMALS'):
+            normals = torch.cat(normals_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
+            batch_dict['point_normals'] = normals
 
         return keypoints
 

@@ -153,6 +153,9 @@ class VPSPose(Detector3DTemplate):
             if post_process_cfg.OUTPUT_PART_SEGMENTATION:
                 record_dict.update({'part_segmentation': points})
             
+            if post_process_cfg.OUTPUT_NORMALS:
+                record_dict.update({'normals': batch_dict['point_normal_preds']})
+            
             if post_process_cfg.OUTPUT_PEARSON_SCORES:
                 record_dict.update({'pearson_scores': pearson_scores})                
 

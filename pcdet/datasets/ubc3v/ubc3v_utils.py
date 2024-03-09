@@ -8,6 +8,7 @@ from scipy.io import loadmat
 import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from matplotlib.colors import rgb_to_hsv
 from sklearn.metrics import pairwise_distances
 
 
@@ -163,49 +164,79 @@ def get_color_maps(cmap='gist_rainbow', plot=False):
                         [127, 116,  63]], np.uint8)
     
     colors_dict = OrderedDict()
-    colors_dict['left_arm'] = [11, 14, 34, 35, 36, 37, 29]
-    colors_dict['right_arm'] = [12, 13, 30, 31, 32, 33, 28]
-    colors_dict['left_leg'] = [7, 19, 21, 23, 25, 27]
-    colors_dict['right_leg'] = [5, 18, 20, 22, 24, 26]
     colors_dict['head'] = [38, 39, 40, 41, 42, 43, 44]
-    colors_dict['torso'] = [10, 16, 17, 8, 9, 15, 0, 1, 4, 6, 2, 3]
-    
+    colors_dict['torso'] = [10, 16, 17, 8, 9, 15, 0, 1, 4, 6]
+    colors_dict['left_leg'] = [2, 5, 18, 20, 22, 24, 26]
+    colors_dict['right_leg'] = [3, 7, 19, 21, 23, 25, 27]
+    colors_dict['left_arm'] = [12, 13, 30, 31, 32, 33, 28]
+    colors_dict['right_arm'] = [11, 14, 34, 35, 36, 37, 29]
     colors_list = []
     [colors_list.extend(list(x)) for x in colors_dict.values()]
     src_map = src_map[colors_list]
     src_map = (src_map / 255).astype(np.float32)
-    
     lens = [len(x) for x in colors_dict.values()]
-    lens[4] += lens.pop()
+    space_range = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
     color_space = np.zeros(0, dtype=np.float32)
     for i, len_i in enumerate(lens):
-        endpoint = False if i < 4 else True
         color_space = np.concatenate([color_space, 
-                                      np.linspace(0.2*i, 0.2*(i+1), len_i, dtype=np.float32, endpoint=endpoint)])
+                                      np.linspace(space_range[i], space_range[i+1], len_i, dtype=np.float32, endpoint=False)])
+    
     cmap = cm.ScalarMappable(cmap=cmap)
     dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
     if plot:
         width, height, channels = 450, 50, 3
-        scale = width / len(src_map)
         rows, cols = np.mgrid[:width, :channels]
-        rows = (rows/scale).astype(np.int32).reshape(-1)
         cols = cols.reshape(-1)
-        src_image = src_map[np.newaxis, rows, cols].reshape((1, -1, 3))
-        src_image = np.repeat(src_image, height, 0)
-        plt.imshow(src_image); plt.show()
-        dst_image = dst_map[np.newaxis, rows, cols].reshape((1, -1, 3))
-        dst_image = np.repeat(dst_image, height, 0)
-        plt.imshow(dst_image); plt.show()
+        rows = rows.reshape(-1)
+        cumsum = 0
+        for key, value in colors_dict.items():
+            scale = width / len(value)
+            scaled_rows = (rows/scale).astype(np.int32) + cumsum
+            src_image = src_map[np.newaxis, scaled_rows, cols].reshape((1, -1, 3))
+            src_image = np.repeat(src_image, height, 0)
+            dst_image = dst_map[np.newaxis, scaled_rows, cols].reshape((1, -1, 3))
+            dst_image = np.repeat(dst_image, height, 0)
+            cumsum += len(value)
+            
+            plt.subplot(2, 1, 1)
+            plt.imshow(src_image)
+            plt.title('UBC3V %s color map' % key)
+            plt.subplot(2, 1, 2)
+            plt.imshow(dst_image)
+            plt.title('VPSPose %s color map' % key)
+            plt.show()
     
-    return src_map, dst_map
+    return src_map, dst_map, color_space
 
 
 def apply_color_map(colors, **kwargs):
-    src_map, dst_map = get_color_maps(**kwargs)
+    src_map, dst_map, color_space = get_color_maps(**kwargs)
     distances = pairwise_distances(colors, src_map)
     idx = np.argmin(distances, 1)
     colors = dst_map[idx]
     return colors
+
+
+def get_normals(points, colors, joints, threshold=0.25):
+    src_map, dst_map, color_space = get_color_maps()
+    distances = pairwise_distances(colors, dst_map)
+    idx = np.argmin(distances, 1)
+    labels = color_space[idx]
+    mask = lambda array, min, max : np.bitwise_and(array >= min, array <  max)
+    distances = pairwise_distances(points, joints)
+    space_range = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    joint_range = [0,   2,   6,   9,  12,  15,  18]
+    idx = np.zeros(len(points), dtype=np.int32)
+    for i in range(len(space_range) - 1):
+        mask_label = mask(labels, space_range[i], space_range[i+1])
+        dist_label = distances[mask_label, joint_range[i]:joint_range[i+1]]
+        min_label = np.argmin(dist_label, 1) + joint_range[i]
+        idx[mask_label] = min_label
+
+    min_distances = distances[np.arange(0, len(points)), idx]
+    normals = joints[idx] - points 
+    normals[min_distances > threshold] = 0
+    return normals
         
 
 def get_joints_name():
@@ -238,7 +269,7 @@ def plot_point_cloud(points, labels, joints):
     plt.show()
 
 
-def draw_point_cloud(points, labels, joints, box3d):
+def draw_point_cloud(points, colors, normals, joints, box3d):
     geometries = []
     lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
              ( 6,  7), ( 7,  8), ( 5,  9), ( 9, 10), (10, 11), (12, 13),
@@ -255,8 +286,14 @@ def draw_point_cloud(points, labels, joints, box3d):
     
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
-    pcd.colors = o3d.utility.Vector3dVector(labels[:, :3])
+    pcd.colors = o3d.utility.Vector3dVector(colors)
     geometries.append(pcd)
+    
+    norm = o3d.geometry.PointCloud()
+    norm.points = o3d.utility.Vector3dVector(points + normals)
+    ids = [(i,i) for i in range(len(points))]
+    vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pcd, norm, ids)
+    geometries.append(vectors)
     
     center = box3d[0:3]
     lwh = box3d[3:6]
@@ -277,7 +314,8 @@ def draw_point_cloud(points, labels, joints, box3d):
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
-    o3d.visualization.draw_geometries(geometries, width=1080, height=1080, lookat=center, up=[0,0,1], front=[0,1,0], zoom=0.6)
+    o3d.visualization.draw_geometries(geometries, width=1080, height=1080, 
+                                      lookat=center, up=[0,0,1], front=[0,1,0], zoom=0.6)
 
 
 frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-2]+x.parts[-1])))
@@ -326,7 +364,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=str, default='mayaProject.000006.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000005.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path
@@ -336,9 +374,10 @@ if __name__ == '__main__':
     anno = get_annos(sequence_path, [args.cam], args.frame)[0]
     anno.update(anno.pop(args.cam))
     points = get_points(anno, mapper)
+    points, colors = points[:, :3], points[:, 3:6]
     joints = anno['Posture']
     box3d = anno['BBox3D']
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    #colors = points[:, 3:6]
-    colors = apply_color_map(points[:, 3:6])
-    draw_point_cloud(points[:, :3], colors, joints, box3d)
+    colors = apply_color_map(colors)
+    normals = get_normals(points, colors, joints)
+    draw_point_cloud(points, colors, normals, joints, box3d)

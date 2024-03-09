@@ -189,6 +189,21 @@ class PointHeadTemplate(nn.Module):
             tb_dict = {}
         tb_dict.update({'point_loss_box': point_loss_box.item()})
         return point_loss_box, tb_dict
+    
+    def get_normal_layer_loss(self, tb_dict=None):
+        pos_mask = self.forward_ret_dict['point_cls_labels'] > 0
+        pos_normalizer = max(1, (pos_mask > 0).sum().item())
+        point_normal_labels = self.forward_ret_dict['point_normal_labels']
+        point_normal_preds = self.forward_ret_dict['point_normal_preds']
+        point_loss_normal = torch.linalg.norm(point_normal_labels - point_normal_preds, dim=-1)
+        point_loss_normal = (point_loss_normal * pos_mask.float()).sum() / pos_normalizer
+
+        loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
+        point_loss_normal = point_loss_normal * loss_weights_dict['point_normal_weight']
+        if tb_dict is None:
+            tb_dict = {}
+        tb_dict.update({'point_loss_normal': point_loss_normal.item()})
+        return point_loss_normal, tb_dict
 
     def generate_predicted_boxes(self, points, point_cls_preds, point_box_preds):
         """
