@@ -222,6 +222,11 @@ def get_normals(points, colors, joints, threshold=0.25):
     distances = pairwise_distances(colors, dst_map)
     idx = np.argmin(distances, 1)
     labels = color_space[idx]
+    """
+    TO DO
+    hue = rgb_to_hsv(colors)[:, 0]
+    labels = T[hue]
+    """
     mask = lambda array, min, max : np.bitwise_and(array >= min, array <  max)
     distances = pairwise_distances(points, joints)
     space_range = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]

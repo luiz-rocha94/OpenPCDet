@@ -147,8 +147,9 @@ MODEL:
         OUTPUT_PART_SEGMENTATION: True
         OUTPUT_PEARSON_SCORES: True
         OUTPUT_NORMALS: True
+        OUTPUT_JPE_SCORES: True
 
-        EVAL_METRIC: [kitti, pearson]
+        EVAL_METRIC: [kitti, pearson, jpe]
 
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False

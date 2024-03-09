@@ -146,18 +146,25 @@ class VPSPose(Detector3DTemplate):
             point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
             point_part_offset = batch_dict['point_part_offset'][bs_mask]
             point_part_labels = batch_dict['point_part_labels'][bs_mask]
+            point_normal_preds = batch_dict['point_normal_preds'][bs_mask]
+            joints = batch_dict['gt_pose'][batch_mask]
             pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
-            points = torch.cat((point_coords, point_part_offset, pearson_coef), dim=1)
-            pearson_scores = vps_pose_utils.pearson_in_boxes(points, final_boxes)               
 
-            if post_process_cfg.OUTPUT_PART_SEGMENTATION:
-                record_dict.update({'part_segmentation': points})
+            if post_process_cfg.get('OUTPUT_PART_SEGMENTATION'):
+                part_segmentation = torch.cat((point_coords, point_part_offset, pearson_coef), dim=1)
+                record_dict.update({'part_segmentation': part_segmentation})
             
-            if post_process_cfg.OUTPUT_NORMALS:
-                record_dict.update({'normals': batch_dict['point_normal_preds']})
+            if post_process_cfg.get('OUTPUT_NORMALS'):
+                record_dict.update({'normals': point_normal_preds})
             
-            if post_process_cfg.OUTPUT_PEARSON_SCORES:
-                record_dict.update({'pearson_scores': pearson_scores})                
+            if post_process_cfg.get('OUTPUT_PEARSON_SCORES'):
+                pearson_points = torch.cat((point_coords, pearson_coef), dim=1)
+                pearson_scores = vps_pose_utils.pearson_in_boxes(pearson_points, final_boxes)         
+                record_dict.update({'pearson_scores': pearson_scores})      
+            
+            if post_process_cfg.get('OUTPUT_JPE_SCORES'):
+                jpe_scores = vps_pose_utils.jpe_in_boxes(point_coords+point_normal_preds, final_boxes, joints=joints) 
+                record_dict.update({'jpe_scores': jpe_scores}) 
 
             pred_dicts.append(record_dict)
 

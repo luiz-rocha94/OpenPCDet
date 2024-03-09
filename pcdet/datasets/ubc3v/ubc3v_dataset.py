@@ -113,11 +113,13 @@ class UBC3VDataset(DatasetTemplate):
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
-            labels = self.get_label(points, annos['pose'][0])
+            gt_pose = annos['pose']
+            labels = self.get_label(points, gt_pose[0])
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar,
-                'points': np.concatenate([points, labels], axis=1)
+                'points': np.concatenate([points, labels], axis=1),
+                'gt_pose': gt_pose
             })
 
         data_dict = self.prepare_data(data_dict=input_dict)
@@ -145,7 +147,7 @@ class UBC3VDataset(DatasetTemplate):
             ret_dict = {
                 'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
                 'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples),
-                'pearson_scores': np.zeros(num_samples, np.float32)
+                'pearson_scores': np.zeros(num_samples, np.float32), 'jpe_scores': np.zeros(num_samples, np.float32)
             }
             return ret_dict
 
@@ -154,6 +156,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_boxes = box_dict['pred_boxes'].cpu().numpy()
             pred_labels = box_dict['pred_labels'].cpu().numpy()
             pearson_scores = box_dict['pearson_scores'].cpu().numpy()
+            jpe_scores = box_dict['jpe_scores'].cpu().numpy()
             pred_dict = get_template_prediction(pred_scores.shape[0])
             if pred_scores.shape[0] == 0:
                 return pred_dict
@@ -163,6 +166,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_dict['boxes_lidar'] = pred_boxes
             pred_dict['pred_labels'] = pred_labels
             pred_dict['pearson_scores'] = pearson_scores
+            pred_dict['jpe_scores'] = jpe_scores
 
             return pred_dict
 
@@ -209,6 +213,10 @@ class UBC3VDataset(DatasetTemplate):
                 mean_pearson_scores = np.mean([anno['pearson_scores'].mean() for anno in eval_det_annos])
                 result_str += 'Pearson Coef: {:.3f}\n'.format(mean_pearson_scores)
                 result_dict.update({'pearson': mean_pearson_scores})
+            elif eval_metric == 'jpe':
+                 mean_jpe_scores = np.mean([anno['jpe_scores'].mean() for anno in eval_det_annos])
+                 result_str += 'Joint Position Error: {:.3f}m\n'.format(mean_jpe_scores)
+                 result_dict.update({'jpe': mean_jpe_scores})
             else:
                 raise NotImplementedError
 

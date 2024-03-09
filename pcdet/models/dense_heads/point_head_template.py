@@ -196,6 +196,8 @@ class PointHeadTemplate(nn.Module):
         point_normal_labels = self.forward_ret_dict['point_normal_labels']
         point_normal_preds = self.forward_ret_dict['point_normal_preds']
         point_loss_normal = torch.linalg.norm(point_normal_labels - point_normal_preds, dim=-1)
+        weights = 1 - F.cosine_similarity(point_normal_labels, point_normal_preds, dim=-1)
+        point_loss_normal = point_loss_normal * weights
         point_loss_normal = (point_loss_normal * pos_mask.float()).sum() / pos_normalizer
 
         loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS

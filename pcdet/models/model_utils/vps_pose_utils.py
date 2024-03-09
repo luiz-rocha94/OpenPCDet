@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import torch
+import torch.nn.functional as F
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import common_utils
 
@@ -15,33 +16,59 @@ def pearson(x, y):
     return coef_pearson.unsqueeze(1)
 
 
-def pearson_in_boxes(points, boxes):
-    points, is_numpy = common_utils.check_numpy_to_torch(points)
-    boxes, is_numpy = common_utils.check_numpy_to_torch(boxes)
-    new_axis = True if len(points.shape) == 2 else False
-    if is_numpy:
-        point_indices = roiaware_pool3d_utils.points_in_boxes_cpu(points[..., 0:3], boxes)
-        points_indices = (point_indices - 1) # TO DO 
-        points = points.unsqueeze(0)
-        boxes = boxes.unsqueeze(0)
-    else:
-        if new_axis:
+def box_scores(func):
+    def wrapper(points, input_boxes, **kwargs):
+        points, is_numpy = common_utils.check_numpy_to_torch(points)
+        input_boxes, is_numpy = common_utils.check_numpy_to_torch(input_boxes)
+        new_axis = True if len(points.shape) == 2 else False
+        if is_numpy:
+            point_indices = roiaware_pool3d_utils.points_in_boxes_cpu(points[..., 0:3], input_boxes)
+            points_indices = (point_indices - 1) # TO DO 
             points = points.unsqueeze(0)
-            boxes = boxes.unsqueeze(0)
+            input_boxes = input_boxes.unsqueeze(0)
+        else:
+            if new_axis:
+                points = points.unsqueeze(0)
+                input_boxes = input_boxes.unsqueeze(0)
+            
+            point_indices = roiaware_pool3d_utils.points_in_boxes_gpu(points[..., 0:3], input_boxes)
         
-        point_indices = roiaware_pool3d_utils.points_in_boxes_gpu(points[..., 0:3], boxes)
+        output_box = func(points, input_boxes, point_indices, **kwargs)
         
-    batch_size, num_objects, _ = boxes.shape
-    pearson_box = torch.zeros((batch_size, num_objects), dtype=boxes.dtype, device=boxes.device)
+        if new_axis:
+            output_box = output_box.squeeze(0)
+            points = points.squeeze(0)
+            input_boxes = input_boxes.squeeze(0)
+        
+        torch.nan_to_num(output_box, out=output_box)
+        return output_box.numpy() if is_numpy else output_box
+    
+    return wrapper
+
+
+@box_scores
+def pearson_in_boxes(points, input_boxes, point_indices):
+    batch_size, num_objects, _ = input_boxes.shape
+    output_box = torch.zeros((batch_size, num_objects), dtype=input_boxes.dtype, device=input_boxes.device)
     for batch_index in range(batch_size):
         for i in range(num_objects):
-            pearson_box[batch_index, i] = points[batch_index, point_indices[batch_index] == i, -1].mean()
-    
-    if new_axis:
-        pearson_box = pearson_box.squeeze(0)
-        points = points.squeeze(0)
-        boxes = boxes.squeeze(0)
-    
-    torch.nan_to_num(pearson_box, out=pearson_box)
-    return pearson_box.numpy() if is_numpy else pearson_box
+            output_box[batch_index, i] = points[batch_index, point_indices[batch_index] == i, -1].mean()
+    return output_box
+
+
+@box_scores
+def jpe_in_boxes(points, input_boxes, point_indices, joints=None):
+    batch_size, num_objects, _ = input_boxes.shape
+    joints, is_numpy = common_utils.check_numpy_to_torch(joints)
+    joints = joints.reshape((num_objects, -1, 3))
+    output_box = torch.zeros((batch_size, num_objects), dtype=input_boxes.dtype, device=input_boxes.device)
+    for batch_index in range(batch_size):
+        for i in range(num_objects):
+            box_points = points[batch_index, point_indices[batch_index] == i, :3]
+            distances = torch.cdist(joints[i], box_points)
+            mask = distances <= 0.1 # 10cm
+            distances[~mask] = 0
+            normalizer = max(1, mask.sum().item())
+            output_box[batch_index, i] = distances.sum()/normalizer
+    return output_box
         
