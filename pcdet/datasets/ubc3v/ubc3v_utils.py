@@ -238,9 +238,10 @@ def get_normals(points, colors, joints, threshold=0.25):
         min_label = np.argmin(dist_label, 1) + joint_range[i]
         idx[mask_label] = min_label
 
-    min_distances = distances[np.arange(0, len(points)), idx]
+    min_distances = distances[np.arange(0, len(points)), idx] > threshold
     normals = joints[idx] - points 
-    normals[min_distances > threshold] = 0
+    normals[min_distances] = 0
+    idx[min_distances] = -1
     return normals, idx
         
 

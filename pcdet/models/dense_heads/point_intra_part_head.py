@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 
 from ...utils import box_coder_utils, box_utils
 from .point_head_template import PointHeadTemplate
@@ -44,6 +45,15 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             )
         else:
             self.normal_layers = None
+        
+        if target_cfg.JOINTS:
+            self.joint_layers = self.make_fc_layers(
+                fc_cfg=self.model_cfg.NORM_FC,
+                input_channels=input_channels,
+                output_channels=target_cfg.JOINTS
+            )
+        else:
+            self.joint_layers = None
 
     def assign_targets(self, input_dict):
         """
@@ -66,24 +76,63 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         extend_gt_boxes = box_utils.enlarge_box3d(
             gt_boxes.view(-1, gt_boxes.shape[-1]), extra_width=self.model_cfg.TARGET_CONFIG.GT_EXTRA_WIDTH
         ).view(batch_size, -1, gt_boxes.shape[-1])
-        if self.model_cfg.TARGET_CONFIG.CLASS:
-            targets_dict = {}
-            targets_dict['point_cls_labels'] = input_dict['point_cls_labels']
-            targets_dict['point_box_labels'] = None
-        else:
-            targets_dict = self.assign_stack_targets(
-                points=point_coords, gt_boxes=gt_boxes, extend_gt_boxes=extend_gt_boxes,
-                set_ignore_flag=True, use_ball_constraint=False,
-                ret_part_labels=not self.model_cfg.TARGET_CONFIG.LABELS, ret_box_labels=(self.box_layers is not None)
-            )
+        targets_dict = self.assign_stack_targets(
+            points=point_coords, gt_boxes=gt_boxes, extend_gt_boxes=extend_gt_boxes,
+            set_ignore_flag=True, use_ball_constraint=False,
+            ret_part_labels=not self.model_cfg.TARGET_CONFIG.LABELS, ret_box_labels=(self.box_layers is not None)
+        )
         
         if self.model_cfg.TARGET_CONFIG.LABELS:
             targets_dict['point_part_labels'] = input_dict['point_part_labels']
         
         if self.model_cfg.TARGET_CONFIG.NORMALS:
             targets_dict['point_normal_labels'] = input_dict['point_normal_labels']
+        
+        if self.model_cfg.TARGET_CONFIG.JOINTS:
+            targets_dict['point_joint_labels'] = input_dict['point_joint_labels']
 
         return targets_dict
+    
+    def get_normal_layer_loss(self, tb_dict=None):
+        pos_mask = self.forward_ret_dict['point_cls_labels'] > 0
+        pos_normalizer = max(1, (pos_mask > 0).sum().item())
+        
+        point_normal_labels = self.forward_ret_dict['point_normal_labels']
+        point_normal_preds = self.forward_ret_dict['point_normal_preds']
+        point_loss_normal = F.smooth_l1_loss(point_normal_preds, point_normal_labels, reduction='none') 
+        point_loss_normal = (point_loss_normal.sum(dim=-1) * pos_mask.float()).sum() / (3 * pos_normalizer)
+        
+        loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
+        point_loss_normal = point_loss_normal * loss_weights_dict['point_normal_weight']
+        if tb_dict is None:
+            tb_dict = {}
+        tb_dict.update({'point_loss_normal': point_loss_normal.item()})
+        return point_loss_normal, tb_dict
+    
+    def get_joint_layer_loss(self, tb_dict=None):
+        point_joint_labels = self.forward_ret_dict['point_joint_labels'].view(-1)
+        point_joint_preds = self.forward_ret_dict['point_joint_preds'].view(-1, self.model_cfg.TARGET_CONFIG.JOINTS)
+
+        positives = (point_joint_labels > 0)
+        negative_joint_weights = (point_joint_labels == 0) * 1.0
+        joint_weights = (negative_joint_weights + 1.0 * positives).float()
+        pos_normalizer = positives.sum(dim=0).float()
+        joint_weights /= torch.clamp(pos_normalizer, min=1.0)
+
+        one_hot_targets = point_joint_preds.new_zeros(*list(point_joint_labels.shape), self.model_cfg.TARGET_CONFIG.JOINTS + 1)
+        one_hot_targets.scatter_(-1, (point_joint_labels * (point_joint_labels >= 0).long()).unsqueeze(dim=-1).long(), 1.0)
+        one_hot_targets = one_hot_targets[..., 1:]
+        joint_loss_src = self.cls_loss_func(point_joint_preds, one_hot_targets, weights=joint_weights)
+        point_loss_joint = joint_loss_src.sum()
+
+        loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
+        point_loss_joint = point_loss_joint * loss_weights_dict['point_joint_weight']
+        if tb_dict is None:
+            tb_dict = {}
+        tb_dict.update({
+            'point_loss_joint': point_loss_joint.item(),
+        })
+        return point_loss_joint, tb_dict
 
     def get_loss(self, tb_dict=None):
         tb_dict = {} if tb_dict is None else tb_dict
@@ -98,6 +147,10 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         if self.normal_layers is not None:
             point_loss_normal, tb_dict = self.get_normal_layer_loss(tb_dict)
             point_loss += point_loss_normal
+        
+        if self.joint_layers is not None:
+            point_loss_joint, tb_dict = self.get_joint_layer_loss(tb_dict)
+            point_loss += point_loss_joint
         
         tb_dict['point_loss'] = point_loss.item()
         return point_loss, tb_dict
@@ -132,6 +185,12 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             point_normal_preds = self.normal_layers(point_features)
             ret_dict['point_normal_preds'] = point_normal_preds
             batch_dict['point_normal_preds'] = point_normal_preds
+        
+        if self.joint_layers is not None:
+            point_joint_preds = self.joint_layers(point_features)
+            ret_dict['point_joint_preds'] = point_joint_preds
+            point_joint_scores = torch.sigmoid(point_joint_preds)
+            batch_dict['point_joint_scores'], _ = point_joint_scores.max(dim=-1)
 
         point_cls_scores = torch.sigmoid(point_cls_preds)
         point_part_offset = torch.sigmoid(point_part_preds)
@@ -144,6 +203,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             ret_dict['point_part_labels'] = targets_dict.get('point_part_labels')
             ret_dict['point_box_labels'] = targets_dict.get('point_box_labels')
             ret_dict['point_normal_labels'] = targets_dict.get('point_normal_labels')
+            ret_dict['point_joint_labels'] = targets_dict.get('point_joint_labels')
 
         if self.box_layers is not None and (not self.training or self.predict_boxes_when_training):
             point_cls_preds, point_box_preds = self.generate_predicted_boxes(

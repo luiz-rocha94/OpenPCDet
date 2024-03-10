@@ -68,12 +68,12 @@ MODEL:
     PFE:
         NAME: VoxelSetAbstraction
         POINT_SOURCE: voxel_centers
-        NUM_KEYPOINTS: 2048
+        NUM_KEYPOINTS: 512
         NUM_OUTPUT_FEATURES: 128
         SAMPLE_METHOD: FPS
         SAMPLE_COLORS: True
         SAMPLE_NORMALS: True
-        SAMPLE_CLASS: True
+        SAMPLE_JOINTS: True
 
         FEATURES_SOURCE: ['bev', 'x_conv1', 'x_conv2', 'x_conv3', 'x_conv4']
         SA_LAYER:
@@ -105,12 +105,11 @@ MODEL:
         REG_FC: [128, 128]
         NORM_FC: [128, 128]
         CLASS_AGNOSTIC: True
-        NUM_AGNOSTIC: 18
         USE_POINT_FEATURES_BEFORE_FUSION: False
         TARGET_CONFIG:
             LABELS: True
             NORMALS: True
-            CLASS: True
+            JOINTS: 18
             GT_EXTRA_WIDTH: [0.2, 0.2, 0.2]
 
         LOSS_CONFIG:
@@ -120,6 +119,7 @@ MODEL:
                 'point_box_weight': 1.0,
                 'point_part_weight': 1.0,
                 'point_normal_weight': 1.0,
+                'point_joint_weight': 1.0,
                 'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             }
 
