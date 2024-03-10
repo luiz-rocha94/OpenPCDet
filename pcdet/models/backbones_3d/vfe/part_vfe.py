@@ -31,5 +31,7 @@ class PartVFE(VFETemplate):
         if len(self.ch) >= 2:
             batch_dict['voxel_colors']  = features_mean[:, self.ch[0]:self.ch[1]].contiguous()
         if len(self.ch) >= 3:
-            batch_dict['voxel_normals']  = features_mean[:, self.ch[1]:self.ch[2]].contiguous()
+            batch_dict['voxel_normals'] = features_mean[:, self.ch[1]:self.ch[2]].contiguous()
+        if len(self.ch) >= 4:
+            batch_dict['voxel_labels']  = features_mean[:, self.ch[2]:self.ch[3]].contiguous().long() + 1
         return batch_dict

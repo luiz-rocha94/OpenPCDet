@@ -150,7 +150,7 @@ class Detector3DTemplate(nn.Module):
         point_head_module = dense_heads.__all__[self.model_cfg.POINT_HEAD.NAME](
             model_cfg=self.model_cfg.POINT_HEAD,
             input_channels=num_point_features,
-            num_class=self.num_class if not self.model_cfg.POINT_HEAD.CLASS_AGNOSTIC else 1,
+            num_class=self.num_class if not self.model_cfg.POINT_HEAD.CLASS_AGNOSTIC else self.model_cfg.POINT_HEAD.get('NUM_AGNOSTIC', 1),
             predict_boxes_when_training=self.model_cfg.get('ROI_HEAD', False)
         )
 

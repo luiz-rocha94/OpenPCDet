@@ -66,9 +66,7 @@ def jpe_in_boxes(points, input_boxes, point_indices, joints=None):
         for i in range(num_objects):
             box_points = points[batch_index, point_indices[batch_index] == i, :3]
             distances = torch.cdist(joints[i], box_points)
-            mask = distances <= 0.1 # 10cm
-            distances[~mask] = 0
-            normalizer = max(1, mask.sum().item())
-            output_box[batch_index, i] = distances.sum()/normalizer
+            smallest_dist, _ = torch.topk(distances, 10, dim=1, largest=False) 
+            output_box[batch_index, i] = smallest_dist.mean()
     return output_box
         

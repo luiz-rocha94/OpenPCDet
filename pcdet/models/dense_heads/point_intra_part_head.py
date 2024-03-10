@@ -66,17 +66,22 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         extend_gt_boxes = box_utils.enlarge_box3d(
             gt_boxes.view(-1, gt_boxes.shape[-1]), extra_width=self.model_cfg.TARGET_CONFIG.GT_EXTRA_WIDTH
         ).view(batch_size, -1, gt_boxes.shape[-1])
-        targets_dict = self.assign_stack_targets(
-            points=point_coords, gt_boxes=gt_boxes, extend_gt_boxes=extend_gt_boxes,
-            set_ignore_flag=True, use_ball_constraint=False,
-            ret_part_labels=not self.model_cfg.TARGET_CONFIG.LABELS, ret_box_labels=(self.box_layers is not None)
-        )
+        if self.model_cfg.TARGET_CONFIG.CLASS:
+            targets_dict = {}
+            targets_dict['point_cls_labels'] = input_dict['point_cls_labels']
+            targets_dict['point_box_labels'] = None
+        else:
+            targets_dict = self.assign_stack_targets(
+                points=point_coords, gt_boxes=gt_boxes, extend_gt_boxes=extend_gt_boxes,
+                set_ignore_flag=True, use_ball_constraint=False,
+                ret_part_labels=not self.model_cfg.TARGET_CONFIG.LABELS, ret_box_labels=(self.box_layers is not None)
+            )
         
         if self.model_cfg.TARGET_CONFIG.LABELS:
             targets_dict['point_part_labels'] = input_dict['point_part_labels']
         
         if self.model_cfg.TARGET_CONFIG.NORMALS:
-            targets_dict['point_normal_labels'] = input_dict['point_normals']
+            targets_dict['point_normal_labels'] = input_dict['point_normal_labels']
 
         return targets_dict
 
@@ -94,6 +99,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             point_loss_normal, tb_dict = self.get_normal_layer_loss(tb_dict)
             point_loss += point_loss_normal
         
+        tb_dict['point_loss'] = point_loss.item()
         return point_loss, tb_dict
 
     def forward(self, batch_dict):

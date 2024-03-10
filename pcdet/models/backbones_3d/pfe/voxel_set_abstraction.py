@@ -249,6 +249,7 @@ class VoxelSetAbstraction(nn.Module):
         keypoints_list = []
         colors_list = []
         normals_list = []
+        labels_list = []
         for bs_idx in range(batch_size):
             bs_mask = (batch_indices == bs_idx)
             sampled_points = src_points[bs_mask].unsqueeze(dim=0)  # (1, N, 3)
@@ -271,6 +272,10 @@ class VoxelSetAbstraction(nn.Module):
                 if self.model_cfg.get('SAMPLE_NORMALS'):
                     sampled_normals = batch_dict['voxel_normals'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
                     normals_list.append(sampled_normals)
+                
+                if self.model_cfg.get('SAMPLE_CLASS'):
+                    sampled_labels = batch_dict['voxel_labels'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    labels_list.append(sampled_labels)
 
             elif self.model_cfg.SAMPLE_METHOD == 'SPC':
                 cur_keypoints = self.sectorized_proposal_centric_sampling(
@@ -294,7 +299,11 @@ class VoxelSetAbstraction(nn.Module):
         
         if self.model_cfg.get('SAMPLE_NORMALS'):
             normals = torch.cat(normals_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
-            batch_dict['point_normals'] = normals
+            batch_dict['point_normal_labels'] = normals
+        
+        if self.model_cfg.get('SAMPLE_CLASS'):
+            labels = torch.cat(labels_list, dim=0).view(-1, 1)  # (B, M, 3) or (N1 + N2 + ..., 4)
+            batch_dict['point_cls_labels'] = labels
 
         return keypoints
 

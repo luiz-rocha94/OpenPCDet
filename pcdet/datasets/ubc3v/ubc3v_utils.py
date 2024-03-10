@@ -241,7 +241,7 @@ def get_normals(points, colors, joints, threshold=0.25):
     min_distances = distances[np.arange(0, len(points)), idx]
     normals = joints[idx] - points 
     normals[min_distances > threshold] = 0
-    return normals
+    return normals, idx
         
 
 def get_joints_name():
@@ -384,5 +384,5 @@ if __name__ == '__main__':
     box3d = anno['BBox3D']
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
     colors = apply_color_map(colors)
-    normals = get_normals(points, colors, joints)
+    normals, _ = get_normals(points, colors, joints)
     draw_point_cloud(points, colors, normals, joints, box3d)

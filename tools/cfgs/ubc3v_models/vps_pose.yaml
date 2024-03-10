@@ -1,4 +1,4 @@
-CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
+CLASS_NAMES: ['Pedestrian']
 
 DATA_CONFIG: 
     _BASE_CONFIG_: cfgs/dataset_configs/ubc3v_dataset.yaml
@@ -9,7 +9,7 @@ MODEL:
 
     VFE:
         NAME: PartVFE
-        NUM_POINT_FEATURES: [4, 7, 10]
+        NUM_POINT_FEATURES: [4, 7, 10, 11]
 
     BACKBONE_3D:
         NAME: VoxelBackBone8x
@@ -38,16 +38,6 @@ MODEL:
 
         ANCHOR_GENERATOR_CONFIG: [
             {
-                'class_name': 'Car',
-                'anchor_sizes': [[3.9, 1.6, 1.56]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-1.78],
-                'align_center': False,
-                'feature_map_stride': 8,
-                'matched_threshold': 0.6,
-                'unmatched_threshold': 0.45
-            },
-            {
                 'class_name': 'Pedestrian',
                 'anchor_sizes': [[0.8, 0.6, 1.73]],
                 'anchor_rotations': [0, 1.57],
@@ -57,16 +47,6 @@ MODEL:
                 'matched_threshold': 0.5,
                 'unmatched_threshold': 0.35
             },
-            {
-                'class_name': 'Cyclist',
-                'anchor_sizes': [[1.76, 0.6, 1.73]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-0.6],
-                'align_center': False,
-                'feature_map_stride': 8,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            }
         ]
 
         TARGET_ASSIGNER_CONFIG:
@@ -93,6 +73,7 @@ MODEL:
         SAMPLE_METHOD: FPS
         SAMPLE_COLORS: True
         SAMPLE_NORMALS: True
+        SAMPLE_CLASS: True
 
         FEATURES_SOURCE: ['bev', 'x_conv1', 'x_conv2', 'x_conv3', 'x_conv4']
         SA_LAYER:
@@ -123,11 +104,13 @@ MODEL:
         PART_FC: [128, 128]
         REG_FC: [128, 128]
         NORM_FC: [128, 128]
-        CLASS_AGNOSTIC: False
+        CLASS_AGNOSTIC: True
+        NUM_AGNOSTIC: 18
         USE_POINT_FEATURES_BEFORE_FUSION: False
         TARGET_CONFIG:
             LABELS: True
             NORMALS: True
+            CLASS: True
             GT_EXTRA_WIDTH: [0.2, 0.2, 0.2]
 
         LOSS_CONFIG:
@@ -161,7 +144,7 @@ MODEL:
 
 OPTIMIZATION:
     BATCH_SIZE_PER_GPU: 16
-    NUM_EPOCHS: 2
+    NUM_EPOCHS: 1
 
     OPTIMIZER: adam_onecycle
     LR: 0.003

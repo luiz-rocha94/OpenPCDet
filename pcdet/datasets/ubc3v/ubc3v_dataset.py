@@ -62,7 +62,8 @@ class UBC3VDataset(DatasetTemplate):
         draw_point_cloud(points[:, :3], points[:, 3:], info['annos']['pose'][0], info['annos']['gt_boxes_lidar'][0])
 
     def get_label(self, point_features, joints):
-        normals = get_normals(point_features[:, 0:3], point_features[:, 3:6], joints)
+        normals, idx = get_normals(point_features[:, 0:3], point_features[:, 3:6], joints)
+        normals = np.concatenate([normals, idx[:, np.newaxis]], axis=1)
         return normals
 
     def get_lidar(self, idx, channels=7, return_offset=False):

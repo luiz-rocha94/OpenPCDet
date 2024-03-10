@@ -27,7 +27,6 @@ class VPSPose(Detector3DTemplate):
         loss_rpn, tb_dict = self.dense_head.get_loss()
         loss_point, tb_dict = self.point_head.get_loss(tb_dict)
         tb_dict = {
-            'loss_rpn': loss_rpn.item(),
             **tb_dict
         }
 

@@ -105,6 +105,8 @@ def main():
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
+            logger.info('pearson_scores: {}; jpe_scores: {}'.format(pred_dicts[0]['pearson_scores'].cpu().numpy(), 
+                                                                    pred_dicts[0]['jpe_scores'].cpu().numpy()))
 
             V.draw_scenes(
                 #points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
