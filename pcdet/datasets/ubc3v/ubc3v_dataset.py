@@ -114,13 +114,13 @@ class UBC3VDataset(DatasetTemplate):
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
-            gt_pose = annos['pose']
-            labels = self.get_label(points, gt_pose[0])
+            gt_poses = annos['pose']
+            labels = self.get_label(points, gt_poses[0])
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar,
                 'points': np.concatenate([points, labels], axis=1),
-                'gt_pose': gt_pose
+                'gt_poses': gt_poses
             })
 
         data_dict = self.prepare_data(data_dict=input_dict)
@@ -148,7 +148,7 @@ class UBC3VDataset(DatasetTemplate):
             ret_dict = {
                 'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
                 'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples),
-                'pearson_scores': np.zeros(num_samples, np.float32), 'jpe_scores': np.zeros(num_samples, np.float32)
+                'pearson_scores': np.zeros(num_samples, np.float32), 'jpe_scores': np.zeros([num_samples, 18], np.float32)
             }
             return ret_dict
 

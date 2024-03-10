@@ -56,17 +56,34 @@ def pearson_in_boxes(points, input_boxes, point_indices):
     return output_box
 
 
+def jpe_in_boxes(pred_joints, gt_joints):
+    num_objects, num_joints, _ = gt_joints.shape
+    output_box = torch.zeros((num_objects, num_joints), dtype=gt_joints.dtype, device=gt_joints.device)
+    for i in range(num_objects):
+        output_box[i] = torch.linalg.norm(gt_joints[i] - pred_joints[i], dim=-1)
+    return output_box
+
+
 @box_scores
-def jpe_in_boxes(points, input_boxes, point_indices, joints=None):
+def pose_estimation(points, input_boxes, point_indices, joint_index=None):
     batch_size, num_objects, _ = input_boxes.shape
-    joints, is_numpy = common_utils.check_numpy_to_torch(joints)
-    joints = joints.reshape((num_objects, -1, 3))
-    output_box = torch.zeros((batch_size, num_objects), dtype=input_boxes.dtype, device=input_boxes.device)
+    num_joints = 18
+    joint_index, is_numpy = common_utils.check_numpy_to_torch(joint_index)
+    joint_index = joint_index.reshape((batch_size, -1, 1))
+    output_box = torch.zeros((batch_size, num_objects, num_joints, 3), dtype=input_boxes.dtype, device=input_boxes.device)
     for batch_index in range(batch_size):
         for i in range(num_objects):
-            box_points = points[batch_index, point_indices[batch_index] == i, :3]
-            distances = torch.cdist(joints[i], box_points)
-            smallest_dist, _ = torch.topk(distances, 10, dim=1, largest=False) 
-            output_box[batch_index, i] = smallest_dist.mean()
+            object_indices = point_indices[batch_index] == i
+            box_points = points[batch_index, object_indices, :3]
+            box_index = joint_index[batch_index, object_indices, 0]
+            num_points = object_indices.sum()
+            pose = torch.zeros((num_joints, num_points, 3), dtype=points.dtype, device=points.device)
+            mask = torch.zeros((num_joints, num_points, 1), dtype=torch.bool, device=points.device)
+            pose[box_index, torch.arange(0, num_points)] = box_points
+            mask[box_index, torch.arange(0, num_points)] = True
+            normalizer = mask.sum(1)
+            pose = pose.sum(1) / normalizer
+            torch.nan_to_num(pose, out=pose)
+            output_box[batch_index, i] = pose
     return output_box
         

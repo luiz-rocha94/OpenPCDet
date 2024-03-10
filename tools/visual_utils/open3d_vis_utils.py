@@ -35,7 +35,8 @@ def get_coor_colors(obj_labels):
     return label_rgba
 
 
-def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, point_colors=None, normals=None, draw_origin=True):
+def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, 
+                point_colors=None, normals=None, ref_poses=None, gt_poses=None, draw_origin=True):
     if isinstance(points, torch.Tensor):
         points = points.cpu().numpy()
     if isinstance(gt_boxes, torch.Tensor):
@@ -76,6 +77,12 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
         vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pts, norm, ids)
         vectors.paint_uniform_color([1, 1, 1])
         vis.add_geometry(vectors)
+     
+    if gt_poses is not None:
+        vis = draw_poses(vis, gt_poses, [0, 1, 0])
+    
+    if ref_poses is not None:
+        vis = draw_poses(vis, ref_poses, [1, 0, 0])
         
     if gt_boxes is not None:
         vis = draw_box(vis, gt_boxes, (0, 1, 0))
@@ -128,3 +135,25 @@ def draw_box(vis, gt_boxes, color=(0, 1, 0), ref_labels=None, score=None):
         #     corners = box3d.get_box_points()
         #     vis.add_3d_label(corners[5], '%.2f' % score[i])
     return vis
+
+
+def draw_poses(vis, poses, color=[0, 1, 0]):
+    if isinstance(poses, torch.Tensor):
+        poses = poses.cpu().numpy()
+    
+    for joints in poses:
+        lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
+                 ( 6,  7), ( 7,  8), ( 5,  9), ( 9, 10), (10, 11), (12, 13),
+                 (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
+        line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
+                                        lines=o3d.utility.Vector2iVector(lines))
+        line_set.paint_uniform_color(color)
+        vis.add_geometry(line_set)
+        for joint in joints:
+            mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+            mesh_sphere.paint_uniform_color(color)
+            mesh_sphere.translate(joint)
+            vis.add_geometry(mesh_sphere)
+    
+    return vis
+

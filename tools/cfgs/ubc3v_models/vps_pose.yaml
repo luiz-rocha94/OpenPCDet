@@ -131,6 +131,7 @@ MODEL:
         OUTPUT_PEARSON_SCORES: True
         OUTPUT_NORMALS: True
         OUTPUT_JPE_SCORES: True
+        OUTPUT_POSE_ESTIMATION: True
 
         EVAL_METRIC: [kitti, pearson, jpe]
 
@@ -144,7 +145,7 @@ MODEL:
 
 OPTIMIZATION:
     BATCH_SIZE_PER_GPU: 16
-    NUM_EPOCHS: 1
+    NUM_EPOCHS: 5
 
     OPTIMIZER: adam_onecycle
     LR: 0.003

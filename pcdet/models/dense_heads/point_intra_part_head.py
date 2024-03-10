@@ -190,7 +190,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             point_joint_preds = self.joint_layers(point_features)
             ret_dict['point_joint_preds'] = point_joint_preds
             point_joint_scores = torch.sigmoid(point_joint_preds)
-            batch_dict['point_joint_scores'], _ = point_joint_scores.max(dim=-1)
+            _, batch_dict['point_joint_index'] = point_joint_scores.max(dim=-1)
 
         point_cls_scores = torch.sigmoid(point_cls_preds)
         point_part_offset = torch.sigmoid(point_part_preds)

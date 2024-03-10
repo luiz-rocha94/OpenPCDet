@@ -111,7 +111,8 @@ def main():
             V.draw_scenes(
                 #points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
                 points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
-                normals=pred_dicts[0]['normals'],
+                normals=pred_dicts[0]['normals'], 
+                ref_poses=pred_dicts[0]['pose_estimation'], gt_poses=data_dict['gt_poses'][0],
                 ref_boxes=pred_dicts[0]['pred_boxes'], gt_boxes=data_dict['gt_boxes'][0]
             )
 
