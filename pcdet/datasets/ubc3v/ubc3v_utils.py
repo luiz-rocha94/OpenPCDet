@@ -8,7 +8,7 @@ from scipy.io import loadmat
 import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from matplotlib.colors import rgb_to_hsv
+from matplotlib.colors import rgb_to_hsv, Normalize
 from sklearn.metrics import pairwise_distances
 
 
@@ -181,9 +181,13 @@ def get_color_maps(cmap='gist_rainbow', plot=False):
         color_space = np.concatenate([color_space, 
                                       np.linspace(space_range[i], space_range[i+1], len_i, dtype=np.float32, endpoint=False)])
     
-    cmap = cm.ScalarMappable(cmap=cmap)
+    cmap = cm.ScalarMappable(cmap=cmap, norm=Normalize(vmin=0, vmax=1))
     dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
     if plot:
+        fig, ax = plt.subplots(figsize=(2, 6), layout='constrained')
+        cbar = fig.colorbar(cmap, cax=ax, orientation='vertical', ticks=space_range[1:])
+        cbar.ax.set_yticklabels(list(colors_dict)) 
+        plt.show()
         width, height, channels = 450, 50, 3
         rows, cols = np.mgrid[:width, :channels]
         cols = cols.reshape(-1)
@@ -283,12 +287,12 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                     lines=o3d.utility.Vector2iVector(lines))
     line_set.paint_uniform_color([0, 1, 0])
-    geometries.append(line_set)
+    #geometries.append(line_set)
     for joint in joints:
         mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
         mesh_sphere.paint_uniform_color([0, 1, 0])
         mesh_sphere.translate(joint)
-        geometries.append(mesh_sphere)
+        #geometries.append(mesh_sphere)
     
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
@@ -299,7 +303,7 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     norm.points = o3d.utility.Vector3dVector(points + normals)
     ids = [(i,i) for i in range(len(points))]
     vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pcd, norm, ids)
-    geometries.append(vectors)
+    #geometries.append(vectors)
     
     center = box3d[0:3]
     lwh = box3d[3:6]
@@ -309,14 +313,14 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
     line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
     line_set.paint_uniform_color([0, 255, 0])
-    geometries.append(line_set)
+    #geometries.append(line_set)
     
     forward = 0.1*np.array([np.cos(angle), np.sin(angle), 0], dtype=center.dtype)
     normal = np.stack([center, center + forward])
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(normal), 
                                     lines=o3d.utility.Vector2iVector([(0, 1)]))
     line_set.paint_uniform_color([255, 0, 0])
-    geometries.append(line_set)    
+    #geometries.append(line_set)    
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
@@ -370,7 +374,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=str, default='mayaProject.000005.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path

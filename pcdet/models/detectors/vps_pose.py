@@ -144,26 +144,25 @@ class VPSPose(Detector3DTemplate):
             bs_mask = (batch_dict['point_coords'][:, 0] == index)
             point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
             point_part_offset = batch_dict['point_part_offset'][bs_mask]
-            point_part_labels = batch_dict['point_part_labels'][bs_mask]
             point_normal_preds = batch_dict['point_normal_preds'][bs_mask]
             point_joint_index = batch_dict['point_joint_index'][bs_mask]
-            gt_poses = batch_dict['gt_poses'][batch_mask]
-            pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
             pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, final_boxes, joint_index=point_joint_index) 
 
             if post_process_cfg.get('OUTPUT_PART_SEGMENTATION'):
-                part_segmentation = torch.cat((point_coords, point_part_offset, pearson_coef), dim=1)
-                record_dict.update({'part_segmentation': part_segmentation})
+                record_dict.update({'part_segmentation': point_part_offset})
             
             if post_process_cfg.get('OUTPUT_NORMALS'):
                 record_dict.update({'normals': point_normal_preds})
             
             if post_process_cfg.get('OUTPUT_PEARSON_SCORES'):
+                point_part_labels = batch_dict['point_part_labels'][bs_mask]
+                pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
                 pearson_points = torch.cat((point_coords, pearson_coef), dim=1)
                 pearson_scores = vps_pose_utils.pearson_in_boxes(pearson_points, final_boxes)         
                 record_dict.update({'pearson_scores': pearson_scores})      
             
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
+                gt_poses = batch_dict['gt_poses'][batch_mask]
                 jpe_scores = vps_pose_utils.jpe_in_boxes(pose_estimation, gt_poses) 
                 record_dict.update({'jpe_scores': jpe_scores}) 
             

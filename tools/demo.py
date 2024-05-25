@@ -108,12 +108,22 @@ def main():
             logger.info('pearson_scores: {}; jpe_scores: {}'.format(pred_dicts[0]['pearson_scores'].cpu().numpy(), 
                                                                     pred_dicts[0]['jpe_scores'].cpu().numpy()))
 
+            ref_poses = pred_dicts[0]['pose_estimation']
+            gt_poses = data_dict['gt_poses'][0]
+            mask = (ref_poses == 0).all(-1)
+            new_poses = torch.zeros(ref_poses.shape, dtype=ref_poses.dtype, device=ref_poses.device)
+            new_poses[~mask] = ref_poses[~mask]
+            new_poses[mask] = gt_poses[mask]
+            np_mask = mask.squeeze().cpu().numpy().astype(np.int32)
+            joint_colors = np.array([[1, 0, 0], [0, 1, 0]])[np_mask]
             V.draw_scenes(
+                #points=data_dict['voxels'][..., :3].view((-1, 3)),
                 #points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
-                points=pred_dicts[0]['part_segmentation'][:, :3], point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
-                normals=pred_dicts[0]['normals'], 
-                ref_poses=pred_dicts[0]['pose_estimation'], gt_poses=data_dict['gt_poses'][0],
-                ref_boxes=pred_dicts[0]['pred_boxes'], gt_boxes=data_dict['gt_boxes'][0]
+                points=data_dict['point_coords'][:, 1:], point_colors=pred_dicts[0]['part_segmentation'][:, :3],
+                #normals=pred_dicts[0]['normals'], 
+                #ref_poses=pred_dicts[0]['pose_estimation'], #gt_poses=data_dict['gt_poses'][0],
+                #ref_poses=new_poses, joint_colors=joint_colors
+                #ref_boxes=pred_dicts[0]['pred_boxes'], gt_boxes=data_dict['gt_boxes'][0]
             )
 
             if not OPEN3D_FLAG:

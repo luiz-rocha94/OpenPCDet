@@ -36,7 +36,8 @@ def get_coor_colors(obj_labels):
 
 
 def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, 
-                point_colors=None, normals=None, ref_poses=None, gt_poses=None, draw_origin=True):
+                point_colors=None, normals=None, ref_poses=None, gt_poses=None, joint_colors=[1, 0, 0], 
+                draw_origin=True):
     if isinstance(points, torch.Tensor):
         points = points.cpu().numpy()
     if isinstance(gt_boxes, torch.Tensor):
@@ -65,7 +66,7 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
         if isinstance(point_colors, torch.Tensor):
             point_colors = point_colors.cpu().numpy()
         if point_colors.shape[1] == 4:
-            point_colors = point_colors[:, :3] * point_colors[:, 3, np.newaxis]
+            point_colors = point_colors[:, :3] #* point_colors[:, 3, np.newaxis]
         pts.colors = o3d.utility.Vector3dVector(point_colors)
     
     if normals is not None:
@@ -75,20 +76,27 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
         norm.points = o3d.utility.Vector3dVector(points + normals)
         ids = [(i,i) for i in range(len(points))]
         vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pts, norm, ids)
-        vectors.paint_uniform_color([1, 1, 1])
+        vectors.paint_uniform_color([1, 0, 0])
         vis.add_geometry(vectors)
-     
+    
     if gt_poses is not None:
         vis = draw_poses(vis, gt_poses, [0, 1, 0])
     
     if ref_poses is not None:
-        vis = draw_poses(vis, ref_poses, [1, 0, 0])
+        vis = draw_poses(vis, ref_poses, joint_colors)
         
     if gt_boxes is not None:
         vis = draw_box(vis, gt_boxes, (0, 1, 0))
 
     if ref_boxes is not None:
         vis = draw_box(vis, ref_boxes, (1, 0, 0), ref_labels, ref_scores)
+    
+    vis.get_view_control().set_lookat([0, 0, -2])
+    vis.get_view_control().set_up([0, 0, 1])
+    vis.get_view_control().set_front([-1, 0, 0])
+    vis.get_view_control().set_zoom(0.4)
+    vis.poll_events()
+    vis.update_renderer()
 
     vis.run()
     vis.destroy_window()
@@ -147,11 +155,11 @@ def draw_poses(vis, poses, color=[0, 1, 0]):
                  (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
         line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                         lines=o3d.utility.Vector2iVector(lines))
-        line_set.paint_uniform_color(color)
+        #line_set.paint_uniform_color([0, 1, 0])
         vis.add_geometry(line_set)
-        for joint in joints:
+        for i, joint in enumerate(joints):
             mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
-            mesh_sphere.paint_uniform_color(color)
+            mesh_sphere.paint_uniform_color(color[i] if len(color) == len(joints) else color)
             mesh_sphere.translate(joint)
             vis.add_geometry(mesh_sphere)
     

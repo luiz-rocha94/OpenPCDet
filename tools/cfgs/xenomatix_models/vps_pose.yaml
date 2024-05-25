@@ -2,6 +2,12 @@ CLASS_NAMES: ['Pedestrian']
 
 DATA_CONFIG: 
     _BASE_CONFIG_: cfgs/dataset_configs/ubc3v_dataset.yaml
+    POINT_CLOUD_RANGE: [-2, -4, -3, 2, 4, 1]
+    POINT_FEATURE_ENCODING: {
+        encoding_type: absolute_coordinates_encoding,
+        used_feature_list: ['x', 'y', 'z', 'a'],
+        src_feature_list: ['x', 'y', 'z', 'a'],
+    }
 
 
 MODEL:
@@ -9,7 +15,7 @@ MODEL:
 
     VFE:
         NAME: PartVFE
-        NUM_POINT_FEATURES: [4, 7, 10, 11]
+        NUM_POINT_FEATURES: [4]
 
     BACKBONE_3D:
         NAME: VoxelBackBone8x
@@ -71,9 +77,9 @@ MODEL:
         NUM_KEYPOINTS: 512
         NUM_OUTPUT_FEATURES: 128
         SAMPLE_METHOD: FPS
-        SAMPLE_COLORS: True
-        SAMPLE_NORMALS: True
-        SAMPLE_JOINTS: True
+        SAMPLE_COLORS: False
+        SAMPLE_NORMALS: False
+        SAMPLE_JOINTS: False
 
         FEATURES_SOURCE: ['bev', 'x_conv1', 'x_conv2', 'x_conv3', 'x_conv4']
         SA_LAYER:
@@ -125,12 +131,12 @@ MODEL:
 
     POST_PROCESSING:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
-        SCORE_THRESH: 0.1
+        SCORE_THRESH: 0.2
         OUTPUT_RAW_SCORE: False
         OUTPUT_PART_SEGMENTATION: True
-        OUTPUT_PEARSON_SCORES: True
+        OUTPUT_PEARSON_SCORES: False
         OUTPUT_NORMALS: True
-        OUTPUT_JPE_SCORES: True
+        OUTPUT_JPE_SCORES: False
         OUTPUT_POSE_ESTIMATION: True
 
         EVAL_METRIC: [kitti, pearson, jpe]
