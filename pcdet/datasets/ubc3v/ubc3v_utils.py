@@ -12,6 +12,55 @@ from matplotlib.colors import rgb_to_hsv, Normalize
 from sklearn.metrics import pairwise_distances
 
 
+def depth_transform(depth):
+    min_, max_ = 50, 800
+    zz = 1.03 * ((max_ - min_) * (depth / 255) + min_).astype(np.float32)
+    return zz
+
+
+def points_transform(points, rotation, translation):
+    rotyx = rotation[0]
+    if rotyx > 0:
+        rotyx = 180-rotyx
+    else:
+        rotyx = -rotyx
+    rotyy = rotation[1]
+    if translation[[0, 2]].prod() > 0:
+        if rotyy < 0:
+            rotyy = -rotyy
+        else:
+            rotyy = -180+rotyy
+    else:
+        if rotyy < 0:
+            rotyy = -180+rotyy
+        else:
+            rotyy = -rotyy
+    
+    rot = Rotation.from_euler('xyz', [rotyx, rotyy, 0], degrees=True)
+    new_points = rot.apply(points).astype(np.float32)
+    new_points += translation.reshape((1,-1))
+    new_points = new_points/100
+    new_points[:, [1, 2]] = new_points[:, [2, 1]]
+    return new_points
+
+
+def get_bouding_box(points, joints):
+    center = joints[5]
+    half = joints[6] - joints[9]
+    angle = np.arctan(half[1]/half[0])
+    angle = angle + (angle < 0)*2*np.pi
+    forward = np.abs(center[0]) >= np.abs(center[ 1])
+    direction = -1*(angle <= np.pi/2) + 1*(angle > np.pi/2)
+    x, y = np.sign(center[0])*np.pi/2, np.sign(center[1])*np.pi/2
+    angle = angle + forward*direction*x + ~forward*y
+    max_, min_ = points.max(0), points.min(0)
+    whl = max_ - min_
+    center = min_ + whl/2
+    box3d = np.concatenate([center, whl, angle[np.newaxis]], 
+                           axis=0).astype(np.float32)
+    return box3d
+    
+
 def get_annos(sequence_path, cams=[], name='*.png'):
     sequence_path = Path(sequence_path)
     assert sequence_path.exists()
@@ -40,22 +89,11 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     posture = np.array([np.stack([joints[key].flat[0].squeeze().astype(np.float32)[12:15] 
                         for key in names]) for joints in posture])
     posture[:, :, [1, 2]] = posture[:, :, [2, 1]]
-    posture = posture/100
-    center = posture[:, 5]
-    half = posture[:, 6] - posture[:, 9]
-    angle = np.arctan(half[:, 1]/half[:, 0])
-    angle = angle + (angle < 0)*2*np.pi
-    forward = np.abs(center[:, 0]) >= np.abs(center[:, 1])
-    direction = -1*(angle <= np.pi/2) + 1*(angle > np.pi/2)
-    x, y = np.sign(center[:, 0])*np.pi/2, np.sign(center[:, 1])*np.pi/2
-    angle = angle + forward*direction*x + ~forward*y
-    min_, max_ = posture.min(1), posture.max(1)
-    whl = max_ - min_
-    box3d = np.concatenate([center, whl, angle[:, np.newaxis]], 
-                           axis=1).astype(np.float32)
+    posture = posture/100 # cm to m
+    annos['Index'] = [[annos[key][i]['idx'] for key in annos.keys()][0] 
+                      for i in range(len(posture))]
     annos['Posture'] = posture
     annos['Label'] = ['Pedestrian' for _ in range(len(posture))]
-    annos['BBox3D'] = box3d
     annos = [{key:annos[key][i] for key in annos.keys()} for i in range(len(posture))]
     return annos
 
@@ -67,56 +105,34 @@ def get_mapper(base_path):
 
 
 def get_points(anno, mapper):
-    depth_file  = Path(anno['depth_file'])
-    class_file  = Path(anno['class_file'])
-    translation = anno['translation']
-    rotation    = anno['rotation']
-    x_map, y_map = mapper[..., 0].reshape(-1), mapper[..., 1].reshape(-1)
-    
-    points = np.zeros((0, 3), dtype=np.float32)
-    labels = np.zeros((0, 4), dtype=np.float32)
-    
-    frame = np.array(Image.open(depth_file).convert('L'))
-    colors = np.array(Image.open(class_file))
-    mask = colors.sum(-1) != 0
-    #plt.imshow(frame, cmap='gray'); plt.show()
-    #plt.imshow(colors, cmap='gray'); plt.show()
-    mask = mask.reshape(-1)
-    frame = frame.reshape(-1)[mask]
-    colors = colors.reshape((-1, 4))[mask] 
-    min_, max_ = 50, 800
-    zz = 1.03 * ((max_ - min_) * (frame / 255) + min_).astype(np.float32)
-    xx, yy = x_map[mask]*zz, y_map[mask]*zz 
-    points = np.concatenate([points, np.stack([xx, yy, zz], axis=-1)])
-    labels = np.concatenate([labels, (colors / 255).astype(np.float32)])
-    
-    rotyx = rotation[0]
-    if rotyx > 0:
-        rotyx = 180-rotyx
-    else:
-        rotyx = -rotyx
-    rotyy = rotation[1]
-    if translation[[0, 2]].prod() > 0:
-        if rotyy < 0:
-            rotyy = -rotyy
-        else:
-            rotyy = -180+rotyy
-    else:
-        if rotyy < 0:
-            rotyy = -180+rotyy
-        else:
-            rotyy = -rotyy
-    
-    rot = Rotation.from_euler('xyz', [rotyx, rotyy, 0], degrees=True)
-    points = rot.apply(points).astype(np.float32)
-    points += translation.reshape((1,-1))
-    points = points/100
-    points[:, [1, 2]] = points[:, [2, 1]]
-    points = np.concatenate([points, labels], -1)
+    points = np.zeros((0, 7), dtype=np.float32)
+    for cam in [c for c in anno.keys() if 'Cam' in c]:
+        anno_cam = anno[cam]
+        depth_file  = Path(anno_cam['depth_file'])
+        class_file  = Path(anno_cam['class_file'])
+        translation = anno_cam['translation']
+        rotation    = anno_cam['rotation']
+        x_map, y_map = mapper[..., 0].reshape(-1), mapper[..., 1].reshape(-1)
+        
+        frame = np.array(Image.open(depth_file).convert('L'))
+        colors = np.array(Image.open(class_file))
+        mask = colors.sum(-1) != 0
+        #plt.imshow(frame, cmap='gray'); plt.show()
+        #plt.imshow(colors, cmap='gray'); plt.show()
+        mask = mask.reshape(-1)
+        frame = frame.reshape(-1)[mask]
+        colors = colors.reshape((-1, 4))[mask] 
+        zz = depth_transform(frame)
+        xx, yy = x_map[mask]*zz, y_map[mask]*zz 
+        cam_points = np.stack([xx, yy, zz], axis=-1)
+        cam_labels = (colors / 255).astype(np.float32)
+        cam_points = points_transform(cam_points, rotation, translation)        
+        cam_points = np.concatenate([cam_points, cam_labels], -1)
+        points = np.concatenate([points, cam_points], 0)
     return points    
 
 
-def get_color_maps(cmap='gist_rainbow', plot=False):
+def get_color_maps(cmap='hsv', plot=False):
     src_map = np.array([[255, 106,   0], 
                         [255,   0,   0],
                         [255, 178, 127],
@@ -287,12 +303,12 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                     lines=o3d.utility.Vector2iVector(lines))
     line_set.paint_uniform_color([0, 1, 0])
-    #geometries.append(line_set)
+    geometries.append(line_set)
     for joint in joints:
         mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
         mesh_sphere.paint_uniform_color([0, 1, 0])
         mesh_sphere.translate(joint)
-        #geometries.append(mesh_sphere)
+        geometries.append(mesh_sphere)
     
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
@@ -303,7 +319,7 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     norm.points = o3d.utility.Vector3dVector(points + normals)
     ids = [(i,i) for i in range(len(points))]
     vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pcd, norm, ids)
-    #geometries.append(vectors)
+    geometries.append(vectors)
     
     center = box3d[0:3]
     lwh = box3d[3:6]
@@ -313,14 +329,14 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
     line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
     line_set.paint_uniform_color([0, 255, 0])
-    #geometries.append(line_set)
+    geometries.append(line_set)
     
-    forward = 0.1*np.array([np.cos(angle), np.sin(angle), 0], dtype=center.dtype)
+    forward = 0.5*np.array([np.cos(angle), np.sin(angle), 0], dtype=center.dtype)
     normal = np.stack([center, center + forward])
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(normal), 
                                     lines=o3d.utility.Vector2iVector([(0, 1)]))
     line_set.paint_uniform_color([255, 0, 0])
-    #geometries.append(line_set)    
+    geometries.append(line_set)    
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
@@ -328,7 +344,7 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
                                       lookat=center, up=[0,0,1], front=[0,1,0], zoom=0.6)
 
 
-frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-2]+x.parts[-1])))
+frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-1])))
 
 
 def map_files(subset_path, save_path, num_workers=4):
@@ -338,17 +354,14 @@ def map_files(subset_path, save_path, num_workers=4):
     def process_single_scene(sequence_path):
         split = sequence_path.parts[-2]
         print('%s sequence: %s' % (split, sequence_path.name))
-        cams = ['Cam3']
-        annos = get_annos(sequence_path, cams)
+        annos = get_annos(sequence_path)
         sample_id_list = []
         for anno in annos:
-            for cam in cams:
-                cam_anno = anno[cam]
-                points = get_points(cam_anno, mapper)
-                sample_idx = cam_anno['idx']
-                points_file = save_path / split / '{}.npy'.format(sample_idx)
-                np.save(points_file, points)
-                sample_id_list.append(sample_idx)
+            points = get_points(anno, mapper)
+            sample_idx = anno['Index']
+            points_file = save_path / split / '{}.npy'.format(sample_idx)
+            np.save(points_file, points)
+            sample_id_list.append(sample_idx)
         return sample_id_list
     
     for split in ['train', 'test', 'valid']:
@@ -381,13 +394,13 @@ if __name__ == '__main__':
     save_path = Path(args.base_path) / 'pose'
     sequence_path = Path(args.base_path) / args.subset_path / args.split_path / args.sequence_path
     mapper = get_mapper(Path(args.base_path) / args.subset_path)
-    anno = get_annos(sequence_path, [args.cam], args.frame)[0]
-    anno.update(anno.pop(args.cam))
+    anno = get_annos(sequence_path, name=args.frame)[0]
     points = get_points(anno, mapper)
     points, colors = points[:, :3], points[:, 3:6]
     joints = anno['Posture']
-    box3d = anno['BBox3D']
+    box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
     colors = apply_color_map(colors)
     normals, _ = get_normals(points, colors, joints)
     draw_point_cloud(points, colors, normals, joints, box3d)
+    #map_files(subset_path, save_path, num_workers=4)
