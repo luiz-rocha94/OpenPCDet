@@ -2,7 +2,7 @@ DATASET: 'UBC3VDataset'
 DATA_PATH: 'C:/Users/rocha/Documentos/data/pose'
 DATA_SRC: 'easy-pose'
 
-POINT_CLOUD_RANGE: [-8, -8, -3, 8, 8, 1]
+POINT_CLOUD_RANGE: [-8, -8, 0, 8, 8, 4]
 
 MAP_CLASS_TO_KITTI: {
     'Pedestrian': 'Pedestrian',

@@ -6,12 +6,12 @@ try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
-    from .ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map, get_normals
+    from .ubc3v_utils import get_annos, get_bouding_box, get_joints_name, draw_point_cloud, apply_color_map, get_normals
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from ubc3v_utils import get_annos, get_joints_name, draw_point_cloud, apply_color_map, get_normals
+    from ubc3v_utils import get_annos, get_bouding_box, get_joints_name, draw_point_cloud, apply_color_map, get_normals
 
 
 class UBC3VDataset(DatasetTemplate):    
@@ -68,7 +68,7 @@ class UBC3VDataset(DatasetTemplate):
 
     def get_lidar(self, idx, channels=7, return_offset=False):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
-        offset = point_features[:, 2].min() + 3
+        offset = point_features[:, 2].min()
         point_features[:, 2] -= offset 
         if channels > 3:
             point_features[:, 3:6] = apply_color_map(point_features[:, 3:6])
@@ -228,31 +228,26 @@ class UBC3VDataset(DatasetTemplate):
 
         def process_single_scene(sequence_path):
             print('%s sequence: %s' % (self.split, sequence_path.name))
-            cams = ['Cam3']
-            annos = get_annos(sequence_path, cams)
+            annos = get_annos(sequence_path)
             infos = []
             for anno in annos:
-                for cam in cams:
-                    info = {}
-                    sample_idx = anno[cam]['idx']
-                    pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
-                    info['point_cloud'] = pc_info
-        
-                    if has_label:
-                        points, z_offset = self.get_lidar(sample_idx, True)
-                        whl = (points.max(0) - points.min(0)).reshape((1, -1))
-                        annotations = {}
-                        pose = np.array(anno['Posture']).reshape((-1, 18, 3))
-                        pose[:, 2] -= z_offset
-                        name = np.array(anno['Label']).reshape(-1)
-                        gt_boxes_lidar = np.array(anno['BBox3D']).reshape((-1, 7))
-                        gt_boxes_lidar[:, 2] -= z_offset
-                        gt_boxes_lidar[:, 3:6] = whl[:, :3]
-                        annotations['pose'] = pose
-                        annotations['name'] = name
-                        annotations['gt_boxes_lidar'] = gt_boxes_lidar
-                        info['annos'] = annotations
-                    infos.append(info)
+                info = {}
+                sample_idx = anno['Index']
+                pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
+                info['point_cloud'] = pc_info
+    
+                if has_label:
+                    points, z_offset = self.get_lidar(sample_idx, return_offset=True)
+                    annotations = {}
+                    joints = anno['Posture']
+                    joints[:, 2] -= z_offset
+                    gt_boxes_lidar = get_bouding_box(points[:, :3], joints)
+                    annotations['pose'] = joints.reshape((-1, 18, 3))
+                    annotations['name'] = np.array(anno['Label']).reshape(-1)
+                    annotations['gt_boxes_lidar'] = gt_boxes_lidar.reshape((-1, 7))
+                    info['annos'] = annotations
+                
+                infos.append(info)
 
             return infos
 
