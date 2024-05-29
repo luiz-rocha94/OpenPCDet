@@ -115,11 +115,9 @@ class UBC3VDataset(DatasetTemplate):
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
             gt_poses = annos['pose']
-            labels = self.get_label(points, gt_poses[0])
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar,
-                'points': np.concatenate([points, labels], axis=1),
                 'gt_poses': gt_poses
             })
 
@@ -158,6 +156,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_labels = box_dict['pred_labels'].cpu().numpy()
             pearson_scores = box_dict['pearson_scores'].cpu().numpy()
             jpe_scores = box_dict['jpe_scores'].cpu().numpy()
+            jap_scores = box_dict['jap_scores'].cpu().numpy()
             pred_dict = get_template_prediction(pred_scores.shape[0])
             if pred_scores.shape[0] == 0:
                 return pred_dict
@@ -168,6 +167,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_dict['pred_labels'] = pred_labels
             pred_dict['pearson_scores'] = pearson_scores
             pred_dict['jpe_scores'] = jpe_scores
+            pred_dict['jap_scores'] = jap_scores
 
             return pred_dict
 
@@ -218,6 +218,9 @@ class UBC3VDataset(DatasetTemplate):
                  mean_jpe_scores = np.mean([anno['jpe_scores'].mean() for anno in eval_det_annos])
                  result_str += 'Joint Position Error: {:.3f}m\n'.format(mean_jpe_scores)
                  result_dict.update({'jpe': mean_jpe_scores})
+                 mean_jap_scores = np.mean([anno['jap_scores'].mean() for anno in eval_det_annos])
+                 result_str += 'Joint Average Precision: {:.3f}m\n'.format(mean_jap_scores)
+                 result_dict.update({'jap': mean_jap_scores})
             else:
                 raise NotImplementedError
 

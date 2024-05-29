@@ -41,16 +41,16 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             self.normal_layers = self.make_fc_layers(
                 fc_cfg=self.model_cfg.NORM_FC,
                 input_channels=input_channels,
-                output_channels=3
+                output_channels=54
             )
         else:
             self.normal_layers = None
         
         if target_cfg.JOINTS:
             self.joint_layers = self.make_fc_layers(
-                fc_cfg=self.model_cfg.NORM_FC,
-                input_channels=input_channels,
-                output_channels=target_cfg.JOINTS
+                fc_cfg=self.model_cfg.JOINT_FC,
+                input_channels=512*18*3,
+                output_channels=54
             )
         else:
             self.joint_layers = None
@@ -89,7 +89,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             targets_dict['point_normal_labels'] = input_dict['point_normal_labels']
         
         if self.model_cfg.TARGET_CONFIG.JOINTS:
-            targets_dict['point_joint_labels'] = input_dict['point_joint_labels']
+            targets_dict['point_joint_labels'] = input_dict['gt_poses']
 
         return targets_dict
     
@@ -100,7 +100,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         point_normal_labels = self.forward_ret_dict['point_normal_labels']
         point_normal_preds = self.forward_ret_dict['point_normal_preds']
         point_loss_normal = F.smooth_l1_loss(point_normal_preds, point_normal_labels, reduction='none') 
-        point_loss_normal = (point_loss_normal.sum(dim=-1) * pos_mask.float()).sum() / (3 * pos_normalizer)
+        point_loss_normal = (point_loss_normal.sum(dim=-1) * pos_mask.float()).sum() / (54 * pos_normalizer)
         
         loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
         point_loss_normal = point_loss_normal * loss_weights_dict['point_normal_weight']
@@ -110,28 +110,19 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         return point_loss_normal, tb_dict
     
     def get_joint_layer_loss(self, tb_dict=None):
-        point_joint_labels = self.forward_ret_dict['point_joint_labels'].view(-1)
-        point_joint_preds = self.forward_ret_dict['point_joint_preds'].view(-1, self.model_cfg.TARGET_CONFIG.JOINTS)
-
-        positives = (point_joint_labels > 0)
-        negative_joint_weights = (point_joint_labels == 0) * 1.0
-        joint_weights = (negative_joint_weights + 1.0 * positives).float()
-        pos_normalizer = positives.sum(dim=0).float()
-        joint_weights /= torch.clamp(pos_normalizer, min=1.0)
-
-        one_hot_targets = point_joint_preds.new_zeros(*list(point_joint_labels.shape), self.model_cfg.TARGET_CONFIG.JOINTS + 1)
-        one_hot_targets.scatter_(-1, (point_joint_labels * (point_joint_labels >= 0).long()).unsqueeze(dim=-1).long(), 1.0)
-        one_hot_targets = one_hot_targets[..., 1:]
-        joint_loss_src = self.cls_loss_func(point_joint_preds, one_hot_targets, weights=joint_weights)
-        point_loss_joint = joint_loss_src.sum()
-
+        pos_mask = (self.forward_ret_dict['point_cls_labels'] > 0).view(-1, 512).any(1)
+        pos_normalizer = max(1, (pos_mask > 0).sum().item())
+        
+        point_joint_labels = self.forward_ret_dict['point_joint_labels'].view(-1, 54)
+        point_joint_preds = self.forward_ret_dict['point_joint_preds'].view(-1, 54)
+        point_loss_joint = F.smooth_l1_loss(point_joint_preds, point_joint_labels, reduction='none') 
+        point_loss_joint = (point_loss_joint.sum(dim=-1) * pos_mask.float()).sum() / (54 * pos_normalizer)
+        
         loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
         point_loss_joint = point_loss_joint * loss_weights_dict['point_joint_weight']
         if tb_dict is None:
             tb_dict = {}
-        tb_dict.update({
-            'point_loss_joint': point_loss_joint.item(),
-        })
+        tb_dict.update({'point_loss_joint': point_loss_joint.item()})
         return point_loss_joint, tb_dict
 
     def get_loss(self, tb_dict=None):
@@ -187,10 +178,11 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             batch_dict['point_normal_preds'] = point_normal_preds
         
         if self.joint_layers is not None:
-            point_joint_preds = self.joint_layers(point_features)
+            point_coords = (batch_dict['point_coords'][:, 1:].view(-1, 512, 1, 3) + 
+                            point_normal_preds.view(-1, 512, 18, 3)).view(-1, 512*18*3)
+            point_joint_preds = self.joint_layers(point_coords)
             ret_dict['point_joint_preds'] = point_joint_preds
-            point_joint_scores = torch.sigmoid(point_joint_preds)
-            _, batch_dict['point_joint_index'] = point_joint_scores.max(dim=-1)
+            batch_dict['point_joint_preds'] = point_joint_preds
 
         point_cls_scores = torch.sigmoid(point_cls_preds)
         point_part_offset = torch.sigmoid(point_part_preds)

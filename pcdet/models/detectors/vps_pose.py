@@ -145,8 +145,6 @@ class VPSPose(Detector3DTemplate):
             point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
             point_part_offset = batch_dict['point_part_offset'][bs_mask]
             point_normal_preds = batch_dict['point_normal_preds'][bs_mask]
-            point_joint_index = batch_dict['point_joint_index'][bs_mask]
-            pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, final_boxes, joint_index=point_joint_index) 
 
             if post_process_cfg.get('OUTPUT_PART_SEGMENTATION'):
                 record_dict.update({'part_segmentation': point_part_offset})
@@ -161,14 +159,15 @@ class VPSPose(Detector3DTemplate):
                 pearson_scores = vps_pose_utils.pearson_in_boxes(pearson_points, final_boxes)         
                 record_dict.update({'pearson_scores': pearson_scores})      
             
+            if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
+                pose_estimation = batch_dict['point_joint_preds'][batch_mask].view(-1, 18, 3)
+                record_dict.update({'pose_estimation': pose_estimation}) 
+                
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
                 gt_poses = batch_dict['gt_poses'][batch_mask]
                 jpe_scores = vps_pose_utils.jpe_in_boxes(pose_estimation, gt_poses) 
                 record_dict.update({'jpe_scores': jpe_scores}) 
-            
-            if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
-                pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, final_boxes, joint_index=point_joint_index) 
-                record_dict.update({'pose_estimation': pose_estimation}) 
+                record_dict.update({'jap_scores': (jpe_scores <= 0.1).sum(1)/18}) 
 
             pred_dicts.append(record_dict)
 

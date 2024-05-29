@@ -270,7 +270,9 @@ class VoxelSetAbstraction(nn.Module):
                     colors_list.append(sampled_colors)
                 
                 if self.model_cfg.get('SAMPLE_NORMALS'):
-                    sampled_normals = batch_dict['voxel_normals'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    sampled_features = batch_dict['voxel_features'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    gt_poses = batch_dict['gt_poses'][bs_idx]
+                    sampled_normals = gt_poses[:, None, :, :] - sampled_features[:, :, None, :]
                     normals_list.append(sampled_normals)
                 
                 if self.model_cfg.get('SAMPLE_JOINTS'):
@@ -298,7 +300,7 @@ class VoxelSetAbstraction(nn.Module):
             batch_dict['point_part_labels'] = colors
         
         if self.model_cfg.get('SAMPLE_NORMALS'):
-            normals = torch.cat(normals_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
+            normals = torch.cat(normals_list, dim=0).view(-1, 54)  # (B, M, 3) or (N1 + N2 + ..., 4)
             batch_dict['point_normal_labels'] = normals
         
         if self.model_cfg.get('SAMPLE_JOINTS'):

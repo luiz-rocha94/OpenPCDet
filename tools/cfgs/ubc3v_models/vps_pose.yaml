@@ -9,7 +9,7 @@ MODEL:
 
     VFE:
         NAME: PartVFE
-        NUM_POINT_FEATURES: [4, 7, 10, 11]
+        NUM_POINT_FEATURES: [3, 6]
 
     BACKBONE_3D:
         NAME: VoxelBackBone8x
@@ -73,7 +73,7 @@ MODEL:
         SAMPLE_METHOD: FPS
         SAMPLE_COLORS: True
         SAMPLE_NORMALS: True
-        SAMPLE_JOINTS: True
+        SAMPLE_JOINTS: False
 
         FEATURES_SOURCE: ['bev', 'x_conv1', 'x_conv2', 'x_conv3', 'x_conv4']
         SA_LAYER:
@@ -104,12 +104,13 @@ MODEL:
         PART_FC: [128, 128]
         REG_FC: [128, 128]
         NORM_FC: [128, 128]
+        JOINT_FC: [512, 128]
         CLASS_AGNOSTIC: True
         USE_POINT_FEATURES_BEFORE_FUSION: False
         TARGET_CONFIG:
             LABELS: True
             NORMALS: True
-            JOINTS: 18
+            JOINTS: True
             GT_EXTRA_WIDTH: [0.2, 0.2, 0.2]
 
         LOSS_CONFIG:
