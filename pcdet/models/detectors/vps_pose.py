@@ -160,7 +160,7 @@ class VPSPose(Detector3DTemplate):
                 record_dict.update({'pearson_scores': pearson_scores})      
             
             if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
-                pose_estimation = batch_dict['point_joint_preds'][batch_mask].view(-1, 18, 3)
+                pose_estimation = batch_dict['point_joint_preds'].view(-1, 18, 3)[batch_mask, None]
                 record_dict.update({'pose_estimation': pose_estimation}) 
                 
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):

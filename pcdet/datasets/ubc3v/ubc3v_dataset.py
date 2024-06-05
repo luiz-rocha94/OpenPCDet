@@ -212,14 +212,14 @@ class UBC3VDataset(DatasetTemplate):
                 result_dict.update(ap_dict)
             elif eval_metric == 'pearson':
                 mean_pearson_scores = np.mean([anno['pearson_scores'].mean() for anno in eval_det_annos])
-                result_str += 'Pearson Coef: {:.3f}\n'.format(mean_pearson_scores)
+                result_str += 'Pearson Coef [0, 1]: {:.3f}\n'.format(mean_pearson_scores)
                 result_dict.update({'pearson': mean_pearson_scores})
             elif eval_metric == 'jpe':
                  mean_jpe_scores = np.mean([anno['jpe_scores'].mean() for anno in eval_det_annos])
-                 result_str += 'Joint Position Error: {:.3f}m\n'.format(mean_jpe_scores)
+                 result_str += 'Joint Position Error [m]: {:.3f}\n'.format(mean_jpe_scores)
                  result_dict.update({'jpe': mean_jpe_scores})
                  mean_jap_scores = np.mean([anno['jap_scores'].mean() for anno in eval_det_annos])
-                 result_str += 'Joint Average Precision: {:.3f}m\n'.format(mean_jap_scores)
+                 result_str += 'Joint Average Precision [%]: {:.3f}\n'.format(mean_jap_scores)
                  result_dict.update({'jap': mean_jap_scores})
             else:
                 raise NotImplementedError

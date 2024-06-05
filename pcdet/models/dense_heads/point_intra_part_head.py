@@ -49,8 +49,8 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         if target_cfg.JOINTS:
             self.joint_layers = self.make_fc_layers(
                 fc_cfg=self.model_cfg.JOINT_FC,
-                input_channels=512*18*3,
-                output_channels=54
+                input_channels=512*6,
+                output_channels=3
             )
         else:
             self.joint_layers = None
@@ -179,8 +179,11 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         
         if self.joint_layers is not None:
             point_coords = (batch_dict['point_coords'][:, 1:].view(-1, 512, 1, 3) + 
-                            point_normal_preds.view(-1, 512, 18, 3)).view(-1, 512*18*3)
-            point_joint_preds = self.joint_layers(point_coords)
+                            point_normal_preds.view(-1, 512, 18, 3))
+            point_part = torch.sigmoid(point_part_preds).view(-1, 512, 1, 3).repeat_interleave(18, dim=2)
+            point_coords_part = torch.concatenate([point_coords, point_part], dim=-1)
+            point_coords_part = point_coords_part.swapaxes(2, 1).contiguous().view(-1, 3072)
+            point_joint_preds = self.joint_layers(point_coords_part)
             ret_dict['point_joint_preds'] = point_joint_preds
             batch_dict['point_joint_preds'] = point_joint_preds
 

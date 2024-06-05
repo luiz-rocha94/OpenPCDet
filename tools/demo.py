@@ -106,7 +106,7 @@ def main():
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
             logger.info('pearson_scores: {}; jpe_scores: {}; jap_scores: {}'.format(pred_dicts[0]['pearson_scores'].cpu().numpy(), 
-                                                                                    pred_dicts[0]['jpe_scores'].cpu().numpy(),
+                                                                                    pred_dicts[0]['jpe_scores'].cpu().numpy().mean(-1),
                                                                                     pred_dicts[0]['jap_scores'].cpu().numpy()
                                                                                     ))
 
