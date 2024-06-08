@@ -54,9 +54,9 @@ def get_bouding_box(points, joints):
     x, y = np.sign(center[0])*np.pi/2, np.sign(center[1])*np.pi/2
     angle = angle + forward*direction*x + ~forward*y
     max_, min_ = points.max(0), points.min(0)
-    whl = max_ - min_
-    center = min_ + whl/2
-    box3d = np.concatenate([center, whl, angle[np.newaxis]], 
+    lwh = max_ - min_
+    center = min_ + lwh/2
+    box3d = np.concatenate([center, lwh, angle[np.newaxis]], 
                            axis=0).astype(np.float32)
     return box3d
     
@@ -182,10 +182,10 @@ def get_color_maps(cmap='hsv', plot=False):
     colors_dict = OrderedDict()
     colors_dict['head'] = [38, 39, 40, 41, 42, 43, 44]
     colors_dict['torso'] = [10, 16, 17, 8, 9, 15, 0, 1, 4, 6]
-    colors_dict['left_leg'] = [2, 5, 18, 20, 22, 24, 26]
     colors_dict['right_leg'] = [3, 7, 19, 21, 23, 25, 27]
-    colors_dict['left_arm'] = [12, 13, 30, 31, 32, 33, 28]
+    colors_dict['left_leg'] = [2, 5, 18, 20, 22, 24, 26]
     colors_dict['right_arm'] = [11, 14, 34, 35, 36, 37, 29]
+    colors_dict['left_arm'] = [12, 13, 30, 31, 32, 33, 28]
     colors_list = []
     [colors_list.extend(list(x)) for x in colors_dict.values()]
     src_map = src_map[colors_list]
@@ -197,6 +197,8 @@ def get_color_maps(cmap='hsv', plot=False):
         color_space = np.concatenate([color_space, 
                                       np.linspace(space_range[i], space_range[i+1], len_i, dtype=np.float32, endpoint=False)])
     
+    joint_idx = np.cumsum([4, 3, 4, 2, 2, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2])[:-1]
+    joint_values = color_space[joint_idx]
     cmap = cm.ScalarMappable(cmap=cmap, norm=Normalize(vmin=0, vmax=1))
     dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
     if plot:
@@ -237,7 +239,7 @@ def apply_color_map(colors, **kwargs):
     return colors
 
 
-def get_normals(points, colors, joints, threshold=0.25):
+def get_normals(points, colors, joints, threshold=0.20):
     src_map, dst_map, color_space = get_color_maps()
     distances = pairwise_distances(colors, dst_map)
     idx = np.argmin(distances, 1)
@@ -266,6 +268,7 @@ def get_normals(points, colors, joints, threshold=0.25):
         
 
 def get_joints_name():
+    # from matlab example code
     names = OrderedDict()
     old_keys = ('HeadPGX', 'Neck1PGX', 'RightShoulderPGX', 'Spine1PGX', 
                 'SpinePGX', 'RightUpLegPGX', 'RightLegPGX', 'RightFootPGX', 
@@ -400,7 +403,7 @@ if __name__ == '__main__':
     joints = anno['Posture']
     box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    colors = apply_color_map(colors)
+    colors = apply_color_map(colors, plot=False)
     normals, _ = get_normals(points, colors, joints)
     draw_point_cloud(points, colors, normals, joints, box3d)
     #map_files(subset_path, save_path, num_workers=4)

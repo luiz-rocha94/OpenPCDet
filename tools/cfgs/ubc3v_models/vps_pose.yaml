@@ -69,6 +69,7 @@ MODEL:
         NAME: VoxelSetAbstraction
         POINT_SOURCE: voxel_centers
         NUM_KEYPOINTS: 512
+        NUM_OUTPUT_JOINTS: 1
         NUM_OUTPUT_FEATURES: 128
         SAMPLE_METHOD: FPS
         SAMPLE_COLORS: True
@@ -109,8 +110,8 @@ MODEL:
         USE_POINT_FEATURES_BEFORE_FUSION: False
         TARGET_CONFIG:
             LABELS: True
-            NORMALS: True
-            JOINTS: True
+            NORMALS: 3
+            JOINTS: 0
             GT_EXTRA_WIDTH: [0.2, 0.2, 0.2]
 
         LOSS_CONFIG:
@@ -131,6 +132,7 @@ MODEL:
         OUTPUT_PART_SEGMENTATION: True
         OUTPUT_PEARSON_SCORES: True
         OUTPUT_NORMALS: True
+        OUTPUT_NORMALS_SCORES: True
         OUTPUT_JPE_SCORES: True
         OUTPUT_POSE_ESTIMATION: True
 
@@ -145,7 +147,7 @@ MODEL:
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 16
+    BATCH_SIZE_PER_GPU: 32
     NUM_EPOCHS: 10
 
     OPTIMIZER: adam_onecycle

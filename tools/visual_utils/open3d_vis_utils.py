@@ -155,7 +155,7 @@ def draw_poses(vis, poses, color=[0, 1, 0]):
                  (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
         line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                         lines=o3d.utility.Vector2iVector(lines))
-        #line_set.paint_uniform_color([0, 1, 0])
+        line_set.paint_uniform_color(color)
         vis.add_geometry(line_set)
         for i, joint in enumerate(joints):
             mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)

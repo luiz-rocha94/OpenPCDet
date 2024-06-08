@@ -157,16 +157,23 @@ class VPSPose(Detector3DTemplate):
                 pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
                 pearson_points = torch.cat((point_coords, pearson_coef), dim=1)
                 pearson_scores = vps_pose_utils.pearson_in_boxes(pearson_points, final_boxes)         
-                record_dict.update({'pearson_scores': pearson_scores})      
+                record_dict.update({'pearson_scores': pearson_scores})  
+            
+            if post_process_cfg.get('OUTPUT_NORMALS_SCORES'):
+                normals_scores = (batch_dict['point_normal_labels'][bs_mask].view(-1, 3) - 
+                                  point_normal_preds.view(-1, 3)).pow(2).sum(-1).sqrt().mean()
+                record_dict.update({'normals_scores': normals_scores})     
             
             if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
-                pose_estimation = batch_dict['point_joint_preds'].view(-1, 18, 3)[batch_mask, None]
+                #pose_estimation = batch_dict['point_joint_preds'].view(-1, 18, 3)[batch_mask, None]
+                pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, 
+                                                                 final_boxes, point_part=point_part_offset) 
                 record_dict.update({'pose_estimation': pose_estimation}) 
                 
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
                 gt_poses = batch_dict['gt_poses'][batch_mask]
                 jpe_scores = vps_pose_utils.jpe_in_boxes(pose_estimation, gt_poses) 
-                record_dict.update({'jpe_scores': jpe_scores}) 
+                record_dict.update({'jpe_scores': jpe_scores.mean(1)}) 
                 record_dict.update({'jap_scores': (jpe_scores <= 0.1).sum(1)/18}) 
 
             pred_dicts.append(record_dict)

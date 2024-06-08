@@ -41,7 +41,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             self.normal_layers = self.make_fc_layers(
                 fc_cfg=self.model_cfg.NORM_FC,
                 input_channels=input_channels,
-                output_channels=54
+                output_channels=target_cfg.NORMALS
             )
         else:
             self.normal_layers = None
@@ -49,7 +49,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         if target_cfg.JOINTS:
             self.joint_layers = self.make_fc_layers(
                 fc_cfg=self.model_cfg.JOINT_FC,
-                input_channels=512*6,
+                input_channels=target_cfg.JOINTS,
                 output_channels=3
             )
         else:
@@ -94,13 +94,14 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         return targets_dict
     
     def get_normal_layer_loss(self, tb_dict=None):
+        target_cfg = self.model_cfg.TARGET_CONFIG
         pos_mask = self.forward_ret_dict['point_cls_labels'] > 0
         pos_normalizer = max(1, (pos_mask > 0).sum().item())
         
         point_normal_labels = self.forward_ret_dict['point_normal_labels']
         point_normal_preds = self.forward_ret_dict['point_normal_preds']
         point_loss_normal = F.smooth_l1_loss(point_normal_preds, point_normal_labels, reduction='none') 
-        point_loss_normal = (point_loss_normal.sum(dim=-1) * pos_mask.float()).sum() / (54 * pos_normalizer)
+        point_loss_normal = (point_loss_normal.sum(dim=-1) * pos_mask.float()).sum() / (target_cfg.NORMALS * pos_normalizer)
         
         loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
         point_loss_normal = point_loss_normal * loss_weights_dict['point_normal_weight']
@@ -110,13 +111,14 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         return point_loss_normal, tb_dict
     
     def get_joint_layer_loss(self, tb_dict=None):
+        target_cfg = self.model_cfg.TARGET_CONFIG
         pos_mask = (self.forward_ret_dict['point_cls_labels'] > 0).view(-1, 512).any(1)
         pos_normalizer = max(1, (pos_mask > 0).sum().item())
         
-        point_joint_labels = self.forward_ret_dict['point_joint_labels'].view(-1, 54)
-        point_joint_preds = self.forward_ret_dict['point_joint_preds'].view(-1, 54)
+        point_joint_labels = self.forward_ret_dict['point_joint_labels'].view(-1, target_cfg.NORMALS)
+        point_joint_preds = self.forward_ret_dict['point_joint_preds'].view(-1, target_cfg.NORMALS)
         point_loss_joint = F.smooth_l1_loss(point_joint_preds, point_joint_labels, reduction='none') 
-        point_loss_joint = (point_loss_joint.sum(dim=-1) * pos_mask.float()).sum() / (54 * pos_normalizer)
+        point_loss_joint = (point_loss_joint.sum(dim=-1) * pos_mask.float()).sum() / (target_cfg.NORMALS * pos_normalizer)
         
         loss_weights_dict = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
         point_loss_joint = point_loss_joint * loss_weights_dict['point_joint_weight']
