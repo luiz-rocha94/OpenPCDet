@@ -165,9 +165,9 @@ class VPSPose(Detector3DTemplate):
                 record_dict.update({'normals_scores': normals_scores})     
             
             if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
-                #pose_estimation = batch_dict['point_joint_preds'].view(-1, 18, 3)[batch_mask, None]
-                pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, 
-                                                                 final_boxes, point_part=point_part_offset) 
+                pose_estimation = (point_normal_preds.view(1, -1, 18, 3) + point_coords.view(1, -1, 1, 3)).mean(1)
+                #pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, 
+                #                                                 final_boxes, point_part=point_part_offset) 
                 record_dict.update({'pose_estimation': pose_estimation}) 
                 
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
