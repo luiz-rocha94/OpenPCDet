@@ -65,7 +65,7 @@ def jpe_in_boxes(pred_joints, gt_joints):
 
 def hue_joint_index(rgb):
     # [0,1]
-    rgb = rgb / 255.0
+    #rgb = rgb / 255.0
     r, g, b = rgb[:, 0], rgb[:, 1], rgb[:, 2]
 
     max_val, _ = torch.max(rgb, dim=1)
@@ -81,7 +81,7 @@ def hue_joint_index(rgb):
     h[max_val == g] = ((60 * ((b - r) / diff) + 120) % 360)[max_val == g]
     h[max_val == b] = ((60 * ((r - g) / diff) + 240) % 360)[max_val == b]
     h[min_val == max_val] = 0.0
-    h = h / 360
+    h = 1 - h / 360
 
     space_range = torch.Tensor([0.05714286, 0.1, 
                                 0.14, 0.16, 0.18, 0.2, 
@@ -97,11 +97,11 @@ def hue_joint_index(rgb):
 
 
 @box_scores
-def pose_estimation(points, input_boxes, point_indices, point_part=None):
+def pose_estimation(points, input_boxes, point_indices, point_part=None, gt_poses=None, point_part_labels=None):
     batch_size, num_objects, _ = input_boxes.shape
     num_joints = 18
     point_part, is_numpy = common_utils.check_numpy_to_torch(point_part)
-    joint_index = hue_joint_index(point_part)
+    joint_index = hue_joint_index(point_part_labels)
     joint_index = joint_index.reshape((batch_size, -1, 1))
     output_box = torch.zeros((batch_size, num_objects, num_joints, 3), dtype=input_boxes.dtype, device=input_boxes.device)
     for batch_index in range(batch_size):
@@ -118,5 +118,9 @@ def pose_estimation(points, input_boxes, point_indices, point_part=None):
             pose = pose.sum(1) / normalizer
             torch.nan_to_num(pose, out=pose)
             output_box[batch_index, i] = pose
+            #(gt_poses[0] - pose).pow(2).sum(-1).sqrt().mean()
+            #_, dist_index = (points.view(-1, 1, 3) - gt_poses.view(1, -1, 3)).pow(2).sum(-1).sqrt().min(-1)
+            #joint_index = hue_joint_index(point_part_labels)
+            #(joint_index == dist_index).sum()
     return output_box
         

@@ -66,17 +66,17 @@ class UBC3VDataset(DatasetTemplate):
         normals = np.concatenate([normals, idx[:, np.newaxis]], axis=1)
         return normals
 
-    def get_lidar(self, idx, channels=7, return_offset=False):
+    def get_lidar(self, idx, return_offset=False):
         point_features = np.load(self.root_path / self.split / '{}.npy'.format(idx))
         offset = point_features[:, 2].min()
-        point_features[:, 2] -= offset 
-        if channels > 3:
-            point_features[:, 3:6] = apply_color_map(point_features[:, 3:6])
+        point_features[:, 2] -= offset
+        colors = apply_color_map(point_features[:, 3:6])
+        point_features = np.concatenate([point_features[:, :3], colors], axis=1)
         
         if return_offset:
-            return point_features[:, :channels], offset
+            return point_features, offset
         
-        return point_features[:, :channels]
+        return point_features
 
     def set_split(self, split, call=True):
         if call:

@@ -132,7 +132,7 @@ def get_points(anno, mapper):
     return points    
 
 
-def get_color_maps(cmap='hsv', plot=False):
+def get_color_maps(cmap='hsv', plot=False, **kwargs):
     src_map = np.array([[255, 106,   0], 
                         [255,   0,   0],
                         [255, 178, 127],
@@ -180,25 +180,33 @@ def get_color_maps(cmap='hsv', plot=False):
                         [127, 116,  63]], np.uint8)
     
     colors_dict = OrderedDict()
-    colors_dict['head'] = [38, 39, 40, 41, 42, 43, 44]
-    colors_dict['torso'] = [10, 16, 17, 8, 9, 15, 0, 1, 4, 6]
-    colors_dict['right_leg'] = [3, 7, 19, 21, 23, 25, 27]
-    colors_dict['left_leg'] = [2, 5, 18, 20, 22, 24, 26]
-    colors_dict['right_arm'] = [11, 14, 34, 35, 36, 37, 29]
-    colors_dict['left_arm'] = [12, 13, 30, 31, 32, 33, 28]
+    colors_dict['head'] = [38, 39, 40, 41, 42]
+    colors_dict['neck'] = [43, 44, 10, 16, 17, 8, 9, 15]
+    colors_dict['torso'] = [0, 1, 4, 6]
+    colors_dict['hip'] = [3, 7, 2, 5]
+    colors_dict['right_leg'] = [19, 21, 23]
+    colors_dict['right_foot'] = [25, 27]
+    colors_dict['left_leg'] = [18, 20, 22]
+    colors_dict['left_foot'] = [24, 26]
+    colors_dict['right_shoulder'] = [11, 14]
+    colors_dict['right_arm'] = [34, 35, 36]
+    colors_dict['right_hand'] = [37, 29]
+    colors_dict['left_shoulder'] = [12, 13]
+    colors_dict['left_arm'] = [30, 31, 32]
+    colors_dict['left_hand'] = [33, 28]
     colors_list = []
     [colors_list.extend(list(x)) for x in colors_dict.values()]
     src_map = src_map[colors_list]
     src_map = (src_map / 255).astype(np.float32)
     lens = [len(x) for x in colors_dict.values()]
-    space_range = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    space_range = np.linspace(0, 1, len(colors_dict)+1, endpoint=True)
     color_space = np.zeros(0, dtype=np.float32)
     for i, len_i in enumerate(lens):
         color_space = np.concatenate([color_space, 
-                                      np.linspace(space_range[i], space_range[i+1], len_i, dtype=np.float32, endpoint=False)])
+                                      np.repeat(space_range[i+1], len_i)])
     
-    joint_idx = np.cumsum([4, 3, 4, 2, 2, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2, 2, 3, 2])[:-1]
-    joint_values = color_space[joint_idx]
+    part_dict = {key:value 
+                 for key, value in zip(colors_dict, np.cumsum([0]+lens)[:-1])}
     cmap = cm.ScalarMappable(cmap=cmap, norm=Normalize(vmin=0, vmax=1))
     dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
     if plot:
@@ -228,19 +236,22 @@ def get_color_maps(cmap='hsv', plot=False):
             plt.title('VPSPose %s color map' % key)
             plt.show()
     
-    return src_map, dst_map, color_space
+    return src_map, dst_map, color_space, part_dict
 
 
 def apply_color_map(colors, **kwargs):
-    src_map, dst_map, color_space = get_color_maps(**kwargs)
+    src_map, dst_map, color_space, part_dict = get_color_maps(**kwargs)
     distances = pairwise_distances(colors, src_map)
     idx = np.argmin(distances, 1)
-    colors = dst_map[idx]
+    colors = np.concatenate([dst_map[idx], 1+idx[:, None]], axis=1)
+    if kwargs.get('part'):
+        part_idx = part_dict[kwargs['part']]
+        colors[(colors != dst_map[part_idx]).any(1), :] = 0
     return colors
 
 
 def get_normals(points, colors, joints, threshold=0.20):
-    src_map, dst_map, color_space = get_color_maps()
+    src_map, dst_map, color_space, part_dict = get_color_maps()
     distances = pairwise_distances(colors, dst_map)
     idx = np.argmin(distances, 1)
     labels = color_space[idx]
@@ -404,6 +415,6 @@ if __name__ == '__main__':
     box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
     colors = apply_color_map(colors, plot=False)
-    normals, _ = get_normals(points, colors, joints)
-    draw_point_cloud(points, colors, normals, joints, box3d)
+    normals, _ = get_normals(points, colors[:, :3], joints)
+    draw_point_cloud(points, colors[:, :3], normals, joints, box3d)
     #map_files(subset_path, save_path, num_workers=4)

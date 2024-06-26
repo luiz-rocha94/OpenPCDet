@@ -27,9 +27,12 @@ class PartVFE(VFETemplate):
         features_mean = voxel_features[:, :, :].sum(dim=1, keepdim=False)
         normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
         features_mean = features_mean / normalizer
+        part_ids, row_ids = torch.mode(voxel_features[..., -1], 1)
+        row_ids[part_ids == 0] = 0
         batch_dict['voxel_features']    = features_mean[:, :self.ch[0]].contiguous()
         if len(self.ch) >= 2:
-            batch_dict['voxel_colors']  = features_mean[:, self.ch[0]:self.ch[1]].contiguous()
+            batch_dict['voxel_colors']  = voxel_features[torch.arange(0, len(row_ids)), row_ids, self.ch[0]:self.ch[1]]
+            #batch_dict['voxel_colors']  = features_mean[:, self.ch[0]:self.ch[1]].contiguous()
         if len(self.ch) >= 3:
             batch_dict['voxel_normals'] = features_mean[:, self.ch[1]:self.ch[2]].contiguous()
         if len(self.ch) >= 4:

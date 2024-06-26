@@ -165,9 +165,15 @@ class VPSPose(Detector3DTemplate):
                 record_dict.update({'normals_scores': normals_scores})     
             
             if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
-                pose_estimation = (point_normal_preds.view(1, -1, 18, 3) + point_coords.view(1, -1, 1, 3)).mean(1)
-                #pose_estimation = vps_pose_utils.pose_estimation(point_coords+point_normal_preds, 
-                #                                                 final_boxes, point_part=point_part_offset) 
+                #new_points = batch_dict['point_normal_labels'][bs_mask].view(1, -1, 18, 3) + point_coords.view(1, -1, 1, 3)
+                new_points = point_normal_preds.view(1, -1, 18, 3) + point_coords.view(1, -1, 1, 3)
+                pose_estimation = new_points.mean(1)
+                """
+                pose_estimation = vps_pose_utils.pose_estimation(new_points.view((1, -1, 3)), final_boxes.view((1, -1, 7)), 
+                                                                 point_part=point_part_offset.repeat_interleave(18, 0), 
+                                                                 gt_poses=batch_dict['gt_poses'][batch_mask],
+                                                                 point_part_labels=point_part_labels.repeat_interleave(18, 0)) 
+                """
                 record_dict.update({'pose_estimation': pose_estimation}) 
                 
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
