@@ -105,10 +105,13 @@ def main():
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
-            logger.info('pearson_scores: {:.3f}; jpe_scores: {:.3f}; jap_scores: {:.3f}'.format(pred_dicts[0]['pearson_scores'].cpu().numpy()[0], 
-                                                                                                pred_dicts[0]['jpe_scores'].cpu().numpy()[0],
-                                                                                                pred_dicts[0]['jap_scores'].cpu().numpy()[0]
-                                                                                                ))
+            logger.info(('pearson_scores: {:.3f}; ' 
+                         'normals_scores: {:.3f}; ' 
+                         'jpe_scores: {:.3f}; ' 
+                         'jap_scores: {:.3f}').format(pred_dicts[0]['pearson_scores'].cpu().numpy()[0], 
+                                                      pred_dicts[0]['normals_scores'].cpu().numpy()[0], 
+                                                      pred_dicts[0]['jpe_scores'].cpu().numpy()[0], 
+                                                      pred_dicts[0]['jap_scores'].cpu().numpy()[0]))
 
             V.draw_scenes(
                 #points=data_dict['voxels'][..., :3].view((-1, 3)),

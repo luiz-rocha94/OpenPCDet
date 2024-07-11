@@ -11,7 +11,7 @@ def pearson(x, y):
     x_norm = x - x_mean
     y_norm = y - y_mean
     coef_pearson = torch.sum(x_norm * y_norm, 1) / (torch.sqrt(torch.sum(x_norm ** 2, 1)) * torch.sqrt(torch.sum(y_norm ** 2, 1)))
-    coef_pearson = (coef_pearson + 1) / 2
+    #coef_pearson = (coef_pearson + 1) / 2
     torch.nan_to_num(coef_pearson, out=coef_pearson)
     return coef_pearson.unsqueeze(1)
 
@@ -95,6 +95,26 @@ def hue_joint_index(rgb):
 
     return joint_index
 
+
+def cartesian_to_spherical(xyz):
+    rho = torch.linalg.norm(xyz, axis=-1)
+    theta = torch.atan2(xyz[..., 1], xyz[..., 0])
+    phi = torch.acos(xyz[..., 2] / rho)
+    rtp = torch.stack([rho, theta, phi], dim=-1)
+    return rtp
+
+
+def spherical_to_cartesian(rtp):
+    shape = rtp.shape
+    rtp = rtp.view(*shape[:-1], 18, 3)
+    x = rtp[..., 0]*torch.sin(rtp[..., 2])*torch.cos(rtp[..., 1])
+    y = rtp[..., 0]*torch.sin(rtp[..., 2])*torch.sin(rtp[..., 1])
+    z = rtp[..., 0]*torch.cos(rtp[..., 2])
+    xyz = torch.stack([x, y, z], dim=-1)
+    xyz = xyz.view(shape)
+    return xyz
+    
+
 def color_joint_index(rgb):
     src_map = torch.Tensor([[1.        , 0.41691217, 0.        ], # Head
                             [1.        , 0.83382434, 0.        ], # Neck
@@ -115,7 +135,7 @@ def color_joint_index(rgb):
                             [1.        , 0.        , 0.5106622 ], # LElbow
                             [1.        , 0.        , 0.09375   ], # LHand
                             ]).to(rgb.device)
-    _, joint_index = (rgb.view(-1, 1, 3) - src_map.view(1, -1, 3)).pow(2).sum(-1).sqrt().min(1)
+    _, joint_index = torch.linalg.norm(rgb.view(-1, 1, 3) - src_map.view(1, -1, 3), axis=-1).min(1)
     joint_index = joint_index.view(-1, 18)
     mask = torch.zeros(joint_index.shape, dtype=torch.bool)
     ids = joint_index[:, 0].clone()

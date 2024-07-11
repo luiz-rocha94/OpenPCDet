@@ -147,7 +147,7 @@ class UBC3VDataset(DatasetTemplate):
             ret_dict = {
                 'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
                 'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples),
-                'pearson_scores': np.zeros(num_samples, np.float32), 
+                'pearson_scores': np.zeros(num_samples, np.float32), 'normals_scores': np.zeros(num_samples, np.float32),
                 'jpe_scores': np.zeros(num_samples, np.float32), 'jpa_scores': np.zeros(num_samples, np.float32)
             }
             return ret_dict
@@ -157,6 +157,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_boxes = box_dict['pred_boxes'].cpu().numpy()
             pred_labels = box_dict['pred_labels'].cpu().numpy()
             pearson_scores = box_dict['pearson_scores'].cpu().numpy()
+            normals_scores = box_dict['normals_scores'].cpu().numpy()
             jpe_scores = box_dict['jpe_scores'].cpu().numpy()
             jap_scores = box_dict['jap_scores'].cpu().numpy()
             pred_dict = get_template_prediction(pred_scores.shape[0])
@@ -168,6 +169,7 @@ class UBC3VDataset(DatasetTemplate):
             pred_dict['boxes_lidar'] = pred_boxes
             pred_dict['pred_labels'] = pred_labels
             pred_dict['pearson_scores'] = pearson_scores
+            pred_dict['normals_scores'] = normals_scores
             pred_dict['jpe_scores'] = jpe_scores
             pred_dict['jap_scores'] = jap_scores
 
@@ -214,8 +216,12 @@ class UBC3VDataset(DatasetTemplate):
                 result_dict.update(ap_dict)
             elif eval_metric == 'pearson':
                 mean_pearson_scores = np.mean([anno['pearson_scores'].mean() for anno in eval_det_annos])
-                result_str += 'Pearson Coef [0, 1]: {:.3f}\n'.format(mean_pearson_scores)
+                result_str += 'Pearson Coef [-1, 1]: {:.3f}\n'.format(mean_pearson_scores)
                 result_dict.update({'pearson': mean_pearson_scores})
+            elif eval_metric == 'normals':
+                mean_normals_scores = np.mean([anno['normals_scores'].mean() for anno in eval_det_annos])
+                result_str += 'Normals [m]: {:.3f}\n'.format(mean_normals_scores)
+                result_dict.update({'normals': mean_normals_scores})
             elif eval_metric == 'jpe':
                  mean_jpe_scores = np.mean([anno['jpe_scores'].mean() for anno in eval_det_annos])
                  result_str += 'Joint Position Error [m]: {:.3f}\n'.format(mean_jpe_scores)

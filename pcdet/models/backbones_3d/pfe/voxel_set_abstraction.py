@@ -270,15 +270,9 @@ class VoxelSetAbstraction(nn.Module):
                     colors_list.append(sampled_colors)
                 
                 if self.model_cfg.get('SAMPLE_NORMALS'):
-                    from ...model_utils.vps_pose_utils import hue_joint_index
+                    from ...model_utils.vps_pose_utils import cartesian_to_spherical
                     gt_poses = batch_dict['gt_poses'][bs_idx]
-                    sampled_normals = gt_poses[:, None, :, :] - keypoints[:, :, None, :]
-                    """
-                    joint_index = hue_joint_index(sampled_colors[0])
-                    sampled_normals = sampled_normals[:, 
-                                                      torch.arange(0, self.model_cfg.NUM_KEYPOINTS, device=joint_index.device), 
-                                                      joint_index]
-                    """
+                    sampled_normals = cartesian_to_spherical(gt_poses[:, None, :, :] - keypoints[:, :, None, :])
                     normals_list.append(sampled_normals)
                 
                 if self.model_cfg.get('SAMPLE_JOINTS'):

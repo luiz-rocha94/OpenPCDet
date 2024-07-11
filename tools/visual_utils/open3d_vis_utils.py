@@ -72,6 +72,11 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     if normals is not None:
         if isinstance(normals, torch.Tensor):
             normals = normals.cpu().numpy()
+        
+        if normals.shape != points.shape:
+            normals = normals.reshape((-1, 18, 3))
+            min_normals = np.linalg.norm(normals, axis=-1).argmin(-1)
+            normals = normals[np.arange(len(points)), min_normals]
         norm = o3d.geometry.PointCloud()
         norm.points = o3d.utility.Vector3dVector(points + normals)
         ids = [(i,i) for i in range(len(points))]

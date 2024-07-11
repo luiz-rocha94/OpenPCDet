@@ -136,7 +136,7 @@ MODEL:
         OUTPUT_JPE_SCORES: True
         OUTPUT_POSE_ESTIMATION: True
 
-        EVAL_METRIC: [kitti, pearson, jpe]
+        EVAL_METRIC: [kitti, pearson, normals, jpe]
 
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
