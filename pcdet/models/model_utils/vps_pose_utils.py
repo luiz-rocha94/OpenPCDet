@@ -95,21 +95,60 @@ def hue_joint_index(rgb):
 
     return joint_index
 
+def color_joint_index(rgb):
+    src_map = torch.Tensor([[1.        , 0.41691217, 0.        ], # Head
+                            [1.        , 0.83382434, 0.        ], # Neck
+                            [0.74926347, 1.        , 0.        ], # Spine2
+                            [0.74926347, 1.        , 0.        ], # Spine1
+                            [0.74926347, 1.        , 0.        ], # Spine
+                            [0.3091895 , 1.        , 0.        ], # Hip
+                            [0.3091895 , 1.        , 0.        ], # RHip
+                            [0.3091895 , 1.        , 0.        ], # LHip
+                            [0.        , 1.        , 0.10772241], # RKnee
+                            [0.        , 1.        , 0.524632  ], # RFoot
+                            [0.        , 1.        , 0.96470314], # LKnee
+                            [0.        , 0.6183849 , 1.        ], # LFoot
+                            [0.        , 0.2014727 , 1.        ], # RShoulder
+                            [0.21543948, 0.        , 1.        ], # RElbow
+                            [0.65551347, 0.        , 1.        ], # RHand
+                            [1.        , 0.        , 0.92757434], # LShoulder
+                            [1.        , 0.        , 0.5106622 ], # LElbow
+                            [1.        , 0.        , 0.09375   ], # LHand
+                            ]).to(rgb.device)
+    _, joint_index = (rgb.view(-1, 1, 3) - src_map.view(1, -1, 3)).pow(2).sum(-1).sqrt().min(1)
+    joint_index = joint_index.view(-1, 18)
+    mask = torch.zeros(joint_index.shape, dtype=torch.bool)
+    ids = joint_index[:, 0].clone()
+    mask[torch.arange(0, len(ids)), ids] = True
+    joint_index[~mask] = -1 # other joints
+    joint_index[ids==2, 2:5] = torch.tensor([[2,3,4]], dtype=joint_index.dtype, device=joint_index.device) # torso joints
+    joint_index[ids==5, 5:8] = torch.tensor([[5,6,7]], dtype=joint_index.dtype, device=joint_index.device) # hip joints
+    mean_mask = torch.zeros(18, dtype=torch.bool)
+    mean_mask[joint_index.unique()[1:]] = True
+    mean_index = torch.arange(0, 18, dtype=joint_index.dtype, device=joint_index.device)[~mean_mask]
+    if len(mean_index):
+        joint_index[:, mean_index] = mean_index.view(1, -1)
+    joint_index = joint_index.view(-1)
+    return joint_index
+
 
 @box_scores
-def pose_estimation(points, input_boxes, point_indices, point_part=None, gt_poses=None, point_part_labels=None):
+def pose_estimation(points, input_boxes, point_indices, point_part=None):
     batch_size, num_objects, _ = input_boxes.shape
     num_joints = 18
     point_part, is_numpy = common_utils.check_numpy_to_torch(point_part)
-    joint_index = hue_joint_index(point_part_labels)
+    joint_index = color_joint_index(point_part)
     joint_index = joint_index.reshape((batch_size, -1, 1))
     output_box = torch.zeros((batch_size, num_objects, num_joints, 3), dtype=input_boxes.dtype, device=input_boxes.device)
     for batch_index in range(batch_size):
         for i in range(num_objects):
             object_indices = point_indices[batch_index] == i
-            box_points = points[batch_index, object_indices, :3]
-            box_index = joint_index[batch_index, object_indices, 0]
-            num_points = object_indices.sum()
+            box_points = points[batch_index, :, :3]
+            box_index = joint_index[batch_index, :, 0]
+            index_mask = box_index != -1
+            box_points = box_points[index_mask]
+            box_index = box_index[index_mask]
+            num_points = index_mask.sum()
             pose = torch.zeros((num_joints, num_points, 3), dtype=points.dtype, device=points.device)
             mask = torch.zeros((num_joints, num_points, 1), dtype=torch.bool, device=points.device)
             pose[box_index, torch.arange(0, num_points)] = box_points
@@ -118,9 +157,5 @@ def pose_estimation(points, input_boxes, point_indices, point_part=None, gt_pose
             pose = pose.sum(1) / normalizer
             torch.nan_to_num(pose, out=pose)
             output_box[batch_index, i] = pose
-            #(gt_poses[0] - pose).pow(2).sum(-1).sqrt().mean()
-            #_, dist_index = (points.view(-1, 1, 3) - gt_poses.view(1, -1, 3)).pow(2).sum(-1).sqrt().min(-1)
-            #joint_index = hue_joint_index(point_part_labels)
-            #(joint_index == dist_index).sum()
-    return output_box
-        
+
+    return output_box    

@@ -115,7 +115,6 @@ def main():
                 #points=data_dict['points'][:, 1:4], point_colors=data_dict['points'][:, 4:7],
                 points=data_dict['point_coords'][:, 1:], point_colors=pred_dicts[0]['part_segmentation'][:, :3],
                 #normals=pred_dicts[0]['normals'], 
-                #ref_poses=pred_dicts[0]['pose_estimation'], 
                 gt_poses=data_dict['gt_poses'][0],
                 ref_poses=pred_dicts[0]['pose_estimation'],
                 ref_boxes=pred_dicts[0]['pred_boxes'], 

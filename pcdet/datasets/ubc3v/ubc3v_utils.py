@@ -235,7 +235,7 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
             plt.imshow(dst_image)
             plt.title('VPSPose %s color map' % key)
             plt.show()
-    
+        print(dst_map[np.cumsum([0]+lens)[:-1]])
     return src_map, dst_map, color_space, part_dict
 
 
@@ -281,15 +281,20 @@ def get_normals(points, colors, joints, threshold=0.20):
 def get_joints_name():
     # from matlab example code
     names = OrderedDict()
-    old_keys = ('HeadPGX', 'Neck1PGX', 'RightShoulderPGX', 'Spine1PGX', 
-                'SpinePGX', 'RightUpLegPGX', 'RightLegPGX', 'RightFootPGX', 
-                'RightToeBasePGX', 'LeftLegPGX', 'LeftFootPGX', 
-                'LeftToeBasePGX', 'RightForeArmPGX', 'RightHandPGX', 
-                'RightFingerBasePGX', 'LeftForeArmPGX', 'LeftHandPGX', 
-                'LeftFingerBasePGX')
-    new_keys = ('Head', 'Neck', 'Spine2', 'Spine1', 'Spine', 'Hip', 'RHip',
-                'RKnee', 'RFoot', 'LHip', 'LKnee', 'LFoot', 'RShoulder',
-                'RElbow', 'RHand', 'LShoulder', 'LElbow', 'LHand')
+    old_keys = ('HeadPGX', 'Neck1PGX', 
+                'RightShoulderPGX', 'Spine1PGX', 'SpinePGX', 
+                'RightUpLegPGX', 'RightLegPGX', 'LeftLegPGX', 
+                'RightFootPGX', 'RightToeBasePGX', 
+                'LeftFootPGX', 'LeftToeBasePGX', 
+                'RightForeArmPGX', 'RightHandPGX', 'RightFingerBasePGX', 
+                'LeftForeArmPGX', 'LeftHandPGX', 'LeftFingerBasePGX')
+    new_keys = ('Head', 'Neck', 
+                'Spine2', 'Spine1', 'Spine', 
+                'Hip', 'RHip', 'LHip', 
+                'RKnee', 'RFoot', 
+                'LKnee', 'LFoot', 
+                'RShoulder', 'RElbow', 'RHand', 
+                'LShoulder', 'LElbow', 'LHand')
     for old_key, new_key in zip(old_keys, new_keys):
         names[old_key] = new_key
     return names
@@ -312,7 +317,7 @@ def plot_point_cloud(points, labels, joints):
 def draw_point_cloud(points, colors, normals, joints, box3d):
     geometries = []
     lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
-             ( 6,  7), ( 7,  8), ( 5,  9), ( 9, 10), (10, 11), (12, 13),
+             ( 6,  8), ( 8,  9), ( 5,  7), ( 7, 10), (10, 11), (12, 13),
              (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                     lines=o3d.utility.Vector2iVector(lines))

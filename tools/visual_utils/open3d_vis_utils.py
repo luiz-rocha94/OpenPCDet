@@ -151,7 +151,7 @@ def draw_poses(vis, poses, color=[0, 1, 0]):
     
     for joints in poses:
         lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
-                 ( 6,  7), ( 7,  8), ( 5,  9), ( 9, 10), (10, 11), (12, 13),
+                 ( 6,  8), ( 8,  9), ( 5,  7), ( 7, 10), (10, 11), (12, 13),
                  (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
         line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                         lines=o3d.utility.Vector2iVector(lines))
