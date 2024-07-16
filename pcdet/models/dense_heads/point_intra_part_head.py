@@ -94,13 +94,12 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         return targets_dict
     
     def get_normal_layer_loss(self, tb_dict=None):
-        from ..model_utils.vps_pose_utils import spherical_to_cartesian
         target_cfg = self.model_cfg.TARGET_CONFIG
         pos_mask = self.forward_ret_dict['point_cls_labels'] > 0
         pos_normalizer = max(1, (pos_mask > 0).sum().item())
         
-        point_normal_labels = spherical_to_cartesian(self.forward_ret_dict['point_normal_labels'])
-        point_normal_preds = spherical_to_cartesian(self.forward_ret_dict['point_normal_preds'])
+        point_normal_labels = self.forward_ret_dict['point_normal_labels']
+        point_normal_preds = torch.relu(self.forward_ret_dict['point_normal_preds'])
         point_loss_normal = F.smooth_l1_loss(point_normal_preds, point_normal_labels, reduction='none') 
         point_loss_normal = (point_loss_normal.sum(dim=-1) * pos_mask.float()).sum() / (target_cfg.NORMALS * pos_normalizer)
         
@@ -178,7 +177,7 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
         if self.normal_layers is not None:
             point_normal_preds = self.normal_layers(point_features)
             ret_dict['point_normal_preds'] = point_normal_preds
-            batch_dict['point_normal_preds'] = point_normal_preds
+            batch_dict['point_normal_preds'] = torch.relu(point_normal_preds)
         
         if self.joint_layers is not None:
             point_coords = (batch_dict['point_coords'][:, 1:].view(-1, 512, 1, 3) + 

@@ -98,7 +98,7 @@ def hue_joint_index(rgb):
 
 def cartesian_to_spherical(xyz):
     rho = torch.linalg.norm(xyz, axis=-1)
-    theta = torch.atan2(xyz[..., 1], xyz[..., 0])
+    theta = torch.atan2(xyz[..., 1], xyz[..., 0]) + torch.pi
     phi = torch.acos(xyz[..., 2] / rho)
     rtp = torch.stack([rho, theta, phi], dim=-1)
     return rtp
@@ -107,6 +107,7 @@ def cartesian_to_spherical(xyz):
 def spherical_to_cartesian(rtp):
     shape = rtp.shape
     rtp = rtp.view(*shape[:-1], 18, 3)
+    rtp[..., 1] += torch.pi
     x = rtp[..., 0]*torch.sin(rtp[..., 2])*torch.cos(rtp[..., 1])
     y = rtp[..., 0]*torch.sin(rtp[..., 2])*torch.sin(rtp[..., 1])
     z = rtp[..., 0]*torch.cos(rtp[..., 2])
