@@ -45,14 +45,16 @@ def points_transform(points, rotation, translation):
 
 
 def get_bouding_box(points, joints):
-    center = joints[5]
-    half = joints[6] - joints[9]
+    names = list(get_joints_name().keys())
+    center = joints[names.index('Hip')]
+    half = joints[names.index('RHip')] - joints[names.index('LHip')]
     angle = np.arctan(half[1]/half[0])
     angle = angle + (angle < 0)*2*np.pi
     forward = np.abs(center[0]) >= np.abs(center[ 1])
     direction = -1*(angle <= np.pi/2) + 1*(angle > np.pi/2)
     x, y = np.sign(center[0])*np.pi/2, np.sign(center[1])*np.pi/2
     angle = angle + forward*direction*x + ~forward*y
+    angle = angle + (angle < 0)*2*np.pi - (angle >= 2*np.pi)*2*np.pi
     max_, min_ = points.max(0), points.min(0)
     lwh = max_ - min_
     center = min_ + lwh/2
@@ -87,7 +89,7 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     posture = gt_data['joints'].squeeze()[start:stop]
     names = get_joints_name()
     posture = np.array([np.stack([joints[key].flat[0].squeeze().astype(np.float32)[12:15] 
-                        for key in names]) for joints in posture])
+                        for key in names.values()]) for joints in posture])
     posture[:, :, [1, 2]] = posture[:, :, [2, 1]]
     posture = posture/100 # cm to m
     annos['Index'] = [[annos[key][i]['idx'] for key in annos.keys()][0] 
@@ -296,7 +298,7 @@ def get_joints_name():
                 'RShoulder', 'RElbow', 'RHand', 
                 'LShoulder', 'LElbow', 'LHand')
     for old_key, new_key in zip(old_keys, new_keys):
-        names[old_key] = new_key
+        names[new_key] = old_key
     return names
 
 
@@ -406,7 +408,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000006.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path
