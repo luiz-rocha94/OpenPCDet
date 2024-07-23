@@ -245,7 +245,7 @@ def apply_color_map(colors, **kwargs):
     src_map, dst_map, color_space, part_dict = get_color_maps(**kwargs)
     distances = pairwise_distances(colors, src_map)
     idx = np.argmin(distances, 1)
-    colors = np.concatenate([dst_map[idx], 1+idx[:, None]], axis=1)
+    colors = np.concatenate([dst_map[idx], 1+idx[:, None]], axis=1).astype(np.float32)
     if kwargs.get('part'):
         part_idx = part_dict[kwargs['part']]
         colors[(colors != dst_map[part_idx]).any(1), :] = 0
@@ -408,7 +408,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=str, default='Cam3')
-    parser.add_argument('--frame', type=str, default='mayaProject.000006.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path

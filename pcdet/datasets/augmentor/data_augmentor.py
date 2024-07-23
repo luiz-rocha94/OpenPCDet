@@ -69,6 +69,13 @@ class DataAugmentor(object):
                 data_dict['roi_boxes'].reshape(-1,dim), np.zeros([1,3]), return_flip=True, enable=enable
                 )
                 data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
+                data_dict['flip_%s'%cur_axis] = enable
+            if 'gt_poses' in data_dict.keys():
+                gt_poses = data_dict['gt_poses'].reshape(-1, 3)
+                _, gt_poses, _ = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                np.zeros(gt_boxes.shape), gt_poses, return_flip=True, enable=enable
+                )
+                data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
 
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
@@ -88,6 +95,11 @@ class DataAugmentor(object):
             roi_boxes, _, _ = augmentor_utils.global_rotation(
             data_dict['roi_boxes'].reshape(-1, dim), np.zeros([1, 3]), rot_range=rot_range, return_rot=True, noise_rotation=noise_rot)
             data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
+        if 'gt_poses' in data_dict.keys():
+            gt_poses = data_dict['gt_poses'].reshape(-1, 3)
+            _, gt_poses, _ = augmentor_utils.global_rotation(
+                np.zeros(gt_boxes.shape), gt_poses, rot_range=rot_range, return_rot=True, noise_rotation=noise_rot)
+            data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
 
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
@@ -107,6 +119,12 @@ class DataAugmentor(object):
             gt_boxes, points, noise_scale = augmentor_utils.global_scaling(
                 data_dict['gt_boxes'], data_dict['points'], config['WORLD_SCALE_RANGE'], return_scale=True
             )
+        if 'gt_poses' in data_dict.keys():
+            gt_poses = data_dict['gt_poses'].reshape(-1, 3)
+            _, gt_poses, _ = augmentor_utils.global_scaling(
+                np.zeros(gt_boxes.shape), gt_poses, config['WORLD_SCALE_RANGE'], return_scale=True, noise_scale=noise_scale
+            )
+            data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
 
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
