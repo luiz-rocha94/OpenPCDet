@@ -58,7 +58,7 @@ def get_bouding_box(points, joints):
     max_, min_ = points.max(0), points.min(0)
     lwh = max_ - min_
     center = min_ + lwh/2
-    box3d = np.concatenate([center, lwh, angle[np.newaxis]], 
+    box3d = np.concatenate([center, lwh[[1,0,2]], angle[np.newaxis]], 
                            axis=0).astype(np.float32)
     return box3d
     
@@ -257,11 +257,6 @@ def get_normals(points, colors, joints, threshold=0.20):
     distances = pairwise_distances(colors, dst_map)
     idx = np.argmin(distances, 1)
     labels = color_space[idx]
-    """
-    TO DO
-    hue = rgb_to_hsv(colors)[:, 0]
-    labels = T[hue]
-    """
     mask = lambda array, min, max : np.bitwise_and(array >= min, array <  max)
     distances = pairwise_distances(points, joints)
     space_range = [0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
@@ -285,19 +280,21 @@ def get_joints_name():
     names = OrderedDict()
     old_keys = ('HeadPGX', 'Neck1PGX', 
                 'RightShoulderPGX', 'Spine1PGX', 'SpinePGX', 
-                'RightUpLegPGX', 'RightLegPGX', 'LeftLegPGX', 
-                'RightFootPGX', 'RightToeBasePGX', 
+                'RightUpLegPGX', 
+                'LeftLegPGX', 'RightLegPGX', 
                 'LeftFootPGX', 'LeftToeBasePGX', 
-                'RightForeArmPGX', 'RightHandPGX', 'RightFingerBasePGX', 
-                'LeftForeArmPGX', 'LeftHandPGX', 'LeftFingerBasePGX')
-    new_keys = ('Head', 'Neck', 
-                'Spine2', 'Spine1', 'Spine', 
-                'Hip', 'RHip', 'LHip', 
-                'RKnee', 'RFoot', 
-                'LKnee', 'LFoot', 
-                'RShoulder', 'RElbow', 'RHand', 
-                'LShoulder', 'LElbow', 'LHand')
-    for old_key, new_key in zip(old_keys, new_keys):
+                'RightFootPGX', 'RightToeBasePGX', 
+                'LeftForeArmPGX', 'LeftHandPGX', 'LeftFingerBasePGX',
+                'RightForeArmPGX', 'RightHandPGX', 'RightFingerBasePGX')
+    new_keys = {0:'Head', 1:'Neck', 
+                2:'Spine2', 3:'Spine1', 4:'Spine', 
+                5:'Hip', 
+                6:'RHip', 7:'LHip', 
+                8:'RKnee', 9:'RFoot', 
+                10:'LKnee', 11:'LFoot', 
+                12:'RShoulder', 13:'RElbow', 14:'RHand', 
+                15:'LShoulder', 16:'LElbow', 17:'LHand'}
+    for old_key, new_key in zip(old_keys, new_keys.values()):
         names[new_key] = old_key
     return names
 
@@ -318,12 +315,20 @@ def plot_point_cloud(points, labels, joints):
 
 def draw_point_cloud(points, colors, normals, joints, box3d):
     geometries = []
-    lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
-             ( 6,  8), ( 8,  9), ( 5,  7), ( 7, 10), (10, 11), (12, 13),
-             (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
+    lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5)]
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                     lines=o3d.utility.Vector2iVector(lines))
     line_set.paint_uniform_color([0, 1, 0])
+    geometries.append(line_set)
+    lines = [( 5,  6), ( 6,  8), ( 8,  9), ( 1, 12), (12, 13), (13, 14)]
+    line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
+                                    lines=o3d.utility.Vector2iVector(lines))
+    line_set.paint_uniform_color([1, 0, 0])
+    geometries.append(line_set)
+    lines = [( 5,  7), ( 7, 10), (10, 11), (1, 15), (15, 16), (16, 17)]
+    line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
+                                    lines=o3d.utility.Vector2iVector(lines))
+    line_set.paint_uniform_color([0, 0, 1])
     geometries.append(line_set)
     for joint in joints:
         mesh_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
