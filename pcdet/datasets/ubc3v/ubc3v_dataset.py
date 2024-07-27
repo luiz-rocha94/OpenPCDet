@@ -114,7 +114,6 @@ class UBC3VDataset(DatasetTemplate):
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
-            gt_boxes_lidar[:, [3, 4]] = gt_boxes_lidar[:, [4, 3]] # fix wlh to lwh
             gt_poses = annos['pose']
             input_dict.update({
                 'gt_names': gt_names,
@@ -223,12 +222,19 @@ class UBC3VDataset(DatasetTemplate):
                 result_str += 'Normals [m]: {:.3f}\n'.format(mean_normals_scores)
                 result_dict.update({'normals': mean_normals_scores})
             elif eval_metric == 'jpe':
-                 mean_jpe_scores = np.mean([anno['jpe_scores'].mean() for anno in eval_det_annos])
-                 result_str += 'Joint Position Error [m]: {:.3f}\n'.format(mean_jpe_scores)
-                 result_dict.update({'jpe': mean_jpe_scores})
-                 mean_jap_scores = np.mean([anno['jap_scores'].mean() for anno in eval_det_annos])
-                 result_str += 'Joint Average Precision [%]: {:.3f}\n'.format(mean_jap_scores)
-                 result_dict.update({'jap': mean_jap_scores})
+                jpe_scores = np.concatenate([anno['jpe_scores'] for anno in eval_det_annos])
+                for j_id in range(18):
+                    j_jpe_scores = jpe_scores[:, j_id]
+                    result_str += 'Joint Position Error J{} mean [m]: {:.3f}\n'.format(j_id, j_jpe_scores.mean())
+                    result_str += 'Joint Position Error J{} std [m]: {:.3f}\n'.format(j_id, j_jpe_scores.std())
+                 
+                mean_jpe_scores = jpe_scores.mean(-1)
+                result_str += 'Joint Position Error mean [m]: {:.3f}\n'.format(mean_jpe_scores.mean())
+                result_str += 'Joint Position Error std [m]: {:.3f}\n'.format(mean_jpe_scores.std())
+                result_dict.update({'jpe': mean_jpe_scores.mean()})
+                mean_jap_scores = np.mean([anno['jap_scores'].mean() for anno in eval_det_annos])
+                result_str += 'Joint Average Precision [%]: {:.3f}\n'.format(mean_jap_scores)
+                result_dict.update({'jap': mean_jap_scores})
             else:
                 raise NotImplementedError
 

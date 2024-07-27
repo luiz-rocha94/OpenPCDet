@@ -86,7 +86,8 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             targets_dict['point_part_labels'] = input_dict['point_part_labels']
         
         if self.model_cfg.TARGET_CONFIG.NORMALS:
-            targets_dict['point_normal_labels'] = input_dict['point_normal_labels']
+            from ..model_utils.vps_pose_utils import cartesian_to_spherical
+            targets_dict['point_normal_labels'] = cartesian_to_spherical(input_dict['point_normal_labels'])
         
         if self.model_cfg.TARGET_CONFIG.JOINTS:
             targets_dict['point_joint_labels'] = input_dict['gt_poses']
@@ -175,9 +176,10 @@ class PointIntraPartOffsetHead(PointHeadTemplate):
             ret_dict['point_box_preds'] = point_box_preds
         
         if self.normal_layers is not None:
+            from ..model_utils.vps_pose_utils import spherical_to_cartesian
             point_normal_preds = self.normal_layers(point_features)
             ret_dict['point_normal_preds'] = point_normal_preds
-            batch_dict['point_normal_preds'] = torch.relu(point_normal_preds)
+            batch_dict['point_normal_preds'] = spherical_to_cartesian(torch.relu(point_normal_preds))
         
         if self.joint_layers is not None:
             point_coords = (batch_dict['point_coords'][:, 1:].view(-1, 512, 1, 3) + 

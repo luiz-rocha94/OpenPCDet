@@ -97,23 +97,26 @@ def hue_joint_index(rgb):
 
 
 def cartesian_to_spherical(xyz):
+    shape = xyz.shape
+    xyz = xyz.view(-1, 3)
     rho = torch.linalg.norm(xyz, axis=-1)
     theta = torch.atan2(xyz[..., 1], xyz[..., 0]) + torch.pi
     phi = torch.acos(xyz[..., 2] / rho)
     rtp = torch.stack([rho, theta, phi], dim=-1)
+    rtp = rtp.view(shape)
     return rtp
 
 
 def spherical_to_cartesian(rtp):
     shape = rtp.shape
-    rtp = rtp.view(*shape[:-1], 18, 3)
+    rtp = rtp.view(-1, 3)
     rtp[..., 1] += torch.pi
     x = rtp[..., 0]*torch.sin(rtp[..., 2])*torch.cos(rtp[..., 1])
     y = rtp[..., 0]*torch.sin(rtp[..., 2])*torch.sin(rtp[..., 1])
     z = rtp[..., 0]*torch.cos(rtp[..., 2])
     xyz = torch.stack([x, y, z], dim=-1)
     xyz = xyz.view(shape)
-    return xyz
+    return xyz 
     
 
 def color_joint_index(rgb):
@@ -154,19 +157,21 @@ def color_joint_index(rgb):
 
 
 @box_scores
-def pose_estimation(points, input_boxes, point_indices, point_part=None):
+def pose_estimation(points, input_boxes, point_indices, point_part=None,  point_dist=None):
     batch_size, num_objects, _ = input_boxes.shape
     num_joints = 18
     point_part, is_numpy = common_utils.check_numpy_to_torch(point_part)
-    joint_index = color_joint_index(point_part)
-    joint_index = joint_index.reshape((batch_size, -1, 1))
+    point_dist, is_numpy = common_utils.check_numpy_to_torch(point_dist)
+    joint_index = color_joint_index(point_part).view(1, -1, 1)
+    point_dist = point_dist.view(1, -1, 1)
     output_box = torch.zeros((batch_size, num_objects, num_joints, 3), dtype=input_boxes.dtype, device=input_boxes.device)
     for batch_index in range(batch_size):
         for i in range(num_objects):
             object_indices = point_indices[batch_index] == i
             box_points = points[batch_index, :, :3]
             box_index = joint_index[batch_index, :, 0]
-            index_mask = box_index != -1
+            box_dist = point_dist[batch_index, :, 0]
+            index_mask = torch.logical_and(box_index != -1, box_dist < 0.50) 
             box_points = box_points[index_mask]
             box_index = box_index[index_mask]
             num_points = index_mask.sum()

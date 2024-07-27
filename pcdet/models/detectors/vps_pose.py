@@ -1,5 +1,4 @@
 from .detector3d_template import Detector3DTemplate
-from ..model_utils.vps_pose_utils import spherical_to_cartesian
 
 
 class VPSPose(Detector3DTemplate):
@@ -143,12 +142,14 @@ class VPSPose(Detector3DTemplate):
             }
             
             bs_mask = (batch_dict['point_coords'][:, 0] == index)
+            point_dist_preds = torch.linalg.norm(batch_dict['point_normal_preds'][bs_mask].view(-1, 3), axis=-1)
             point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
             point_part_offset = batch_dict['point_part_offset'][bs_mask]
-            point_normal_preds = spherical_to_cartesian(batch_dict['point_normal_preds'][bs_mask])
-            #point_normal_preds = spherical_to_cartesian(batch_dict['point_normal_labels'][bs_mask])
-            point_normal_labels = spherical_to_cartesian(batch_dict['point_normal_labels'][bs_mask])
-
+            point_normal_preds = batch_dict['point_normal_preds'][bs_mask]
+            #point_normal_preds = batch_dict['point_normal_labels'][bs_mask]
+            point_normal_labels = batch_dict['point_normal_labels'][bs_mask]
+            point_part_labels = batch_dict['point_part_labels'][bs_mask]
+            
             if post_process_cfg.get('OUTPUT_PART_SEGMENTATION'):
                 record_dict.update({'part_segmentation': point_part_offset})
             
@@ -156,7 +157,6 @@ class VPSPose(Detector3DTemplate):
                 record_dict.update({'normals': point_normal_preds})
             
             if post_process_cfg.get('OUTPUT_PEARSON_SCORES'):
-                point_part_labels = batch_dict['point_part_labels'][bs_mask]
                 pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
                 pearson_points = torch.cat((point_coords, pearson_coef), dim=1)
                 pearson_scores = vps_pose_utils.pearson_in_boxes(pearson_points, final_boxes)         
@@ -168,18 +168,19 @@ class VPSPose(Detector3DTemplate):
             
             if post_process_cfg.get('OUTPUT_POSE_ESTIMATION'):
                 #new_points = batch_dict['point_normal_labels'][bs_mask].view(-1, 18, 3) + point_coords.view(-1, 1, 3)
-                new_points = point_normal_preds.view(1, -1, 18, 3) + point_coords.view(1, -1, 1, 3)
+                new_points = point_normal_preds.view(-1, 18, 3) + point_coords.view(-1, 1, 3)
                 #pose_estimation = new_points.mean(1)
                 #"""
-                pose_estimation = vps_pose_utils.pose_estimation(new_points.view((-1, 3)), final_boxes.view((-1, 7)), 
-                                                                 point_part=point_part_offset.repeat_interleave(18, 0)) 
+                pose_estimation = vps_pose_utils.pose_estimation(new_points.view(-1, 3), final_boxes, 
+                                                                 point_part=point_part_offset.repeat_interleave(18, 0),
+                                                                 point_dist=point_dist_preds) 
                 #"""
                 record_dict.update({'pose_estimation': pose_estimation}) 
                 
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
                 gt_poses = batch_dict['gt_poses'][batch_mask]
                 jpe_scores = vps_pose_utils.jpe_in_boxes(pose_estimation, gt_poses) 
-                record_dict.update({'jpe_scores': jpe_scores.mean(1)}) 
+                record_dict.update({'jpe_scores': jpe_scores}) 
                 record_dict.update({'jap_scores': (jpe_scores <= 0.1).sum(1)/18}) 
 
             pred_dicts.append(record_dict)
