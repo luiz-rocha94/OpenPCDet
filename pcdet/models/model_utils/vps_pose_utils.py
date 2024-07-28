@@ -171,7 +171,7 @@ def pose_estimation(points, input_boxes, point_indices, point_part=None,  point_
             box_points = points[batch_index, :, :3]
             box_index = joint_index[batch_index, :, 0]
             box_dist = point_dist[batch_index, :, 0]
-            index_mask = torch.logical_and(box_index != -1, box_dist < 0.50) 
+            index_mask = torch.logical_and(box_index != -1, box_dist) 
             box_points = box_points[index_mask]
             box_index = box_index[index_mask]
             num_points = index_mask.sum()

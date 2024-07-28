@@ -142,7 +142,7 @@ class VPSPose(Detector3DTemplate):
             }
             
             bs_mask = (batch_dict['point_coords'][:, 0] == index)
-            point_dist_preds = torch.linalg.norm(batch_dict['point_normal_preds'][bs_mask].view(-1, 3), axis=-1)
+            point_dist_preds = torch.linalg.norm(batch_dict['point_normal_preds'][bs_mask].view(-1, 3), axis=-1) < post_process_cfg.DIST_THRESH
             point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
             point_part_offset = batch_dict['point_part_offset'][bs_mask]
             point_normal_preds = batch_dict['point_normal_preds'][bs_mask]
