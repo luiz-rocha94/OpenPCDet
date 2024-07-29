@@ -56,7 +56,7 @@ def pearson_in_boxes(points, input_boxes, point_indices):
     return output_box
 
 
-def jpe_in_boxes(pred_joints, gt_joints):
+def jpe(pred_joints, gt_joints):
     num_objects, num_joints, _ = gt_joints.shape
     output_box = torch.zeros((num_objects, num_joints), dtype=gt_joints.dtype, device=gt_joints.device)
     for i in range(num_objects):

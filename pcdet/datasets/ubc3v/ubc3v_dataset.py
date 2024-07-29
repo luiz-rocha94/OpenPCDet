@@ -227,12 +227,13 @@ class UBC3VDataset(DatasetTemplate):
                     j_jpe_scores = jpe_scores[:, j_id]
                     result_str += 'Joint Position Error J{} mean [m]: {:.3f}\n'.format(j_id, j_jpe_scores.mean())
                     result_str += 'Joint Position Error J{} std [m]: {:.3f}\n'.format(j_id, j_jpe_scores.std())
+                    result_str += 'Joint Average Precision J{} mean [%]: {:.3f}\n'.format(j_id, (j_jpe_scores <= 0.1).mean())
                  
                 mean_jpe_scores = jpe_scores.mean(-1)
                 result_str += 'Joint Position Error mean [m]: {:.3f}\n'.format(mean_jpe_scores.mean())
                 result_str += 'Joint Position Error std [m]: {:.3f}\n'.format(mean_jpe_scores.std())
                 result_dict.update({'jpe': mean_jpe_scores.mean()})
-                mean_jap_scores = np.mean([anno['jap_scores'].mean() for anno in eval_det_annos])
+                mean_jap_scores = np.concatenate([anno['jap_scores'] for anno in eval_det_annos]).mean()
                 result_str += 'Joint Average Precision [%]: {:.3f}\n'.format(mean_jap_scores)
                 result_dict.update({'jap': mean_jap_scores})
             else:

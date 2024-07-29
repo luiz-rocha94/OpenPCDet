@@ -179,7 +179,7 @@ class VPSPose(Detector3DTemplate):
                 
             if post_process_cfg.get('OUTPUT_JPE_SCORES'):
                 gt_poses = batch_dict['gt_poses'][batch_mask]
-                jpe_scores = vps_pose_utils.jpe_in_boxes(pose_estimation, gt_poses) 
+                jpe_scores = vps_pose_utils.jpe(pose_estimation, gt_poses) 
                 record_dict.update({'jpe_scores': jpe_scores}) 
                 record_dict.update({'jap_scores': (jpe_scores <= 0.1).sum(1)/18}) 
 
