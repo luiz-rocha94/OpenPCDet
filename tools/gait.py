@@ -40,7 +40,7 @@ class DemoDataset(DatasetTemplate):
         data_file_list = root_path.glob(f'*{self.ext}') if self.root_path.is_dir() else [self.root_path]
         data_file_list = sorted(data_file_list, key=lambda x: int(''.join(filter(str.isdigit, x.name))))
  
-        self.sample_file_list = data_file_list[2:18]
+        self.sample_file_list = data_file_list
 
     def __len__(self):
         return len(self.sample_file_list)
@@ -55,12 +55,12 @@ class DemoDataset(DatasetTemplate):
                 lines = f.readlines()[8:]
             
             points = np.array([line.strip().split(' ') for line in lines], dtype=np.float32).reshape((-1, 4))
-            points[:, 3] = 1
-            points[:, 2] = -1*(points[:, 2] + 2)
             points[:, 0] -= 9
+            points[:, 2] = -1*(points[:, 2] - 1.5)
+            points[:, 3] = 1
             points = points[np.logical_and(points[:, 1] > -3, 
-                                           points[:, 1] < 1)]
-            points = points[points[:, 2] >= (-3 + 0.10)]
+                                           points[:, 1] < 3)]
+            points = points[points[:, 2] >= 0.05]
             points = points[np.logical_and(points[:, 0] > -0.5, 
                                            points[:, 0] < 0.5)]
             
@@ -80,7 +80,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default='cfgs/xenomatix_models/vps_pose.yaml',
                         help='specify the config for demo')
-    parser.add_argument('--data_path', type=str, default=r'D:\mestrado\OpenPCDet\data\xenomatix\val',
+    parser.add_argument('--data_path', type=str, default=r'D:\mestrado\OpenPCDet\data\xenomatix\seq2',
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ckpt', type=str, default='cfgs/xenomatix_models/vps_pose_latest.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.ply', help='specify the extension of your point cloud data file')
@@ -115,21 +115,21 @@ def main():
     model.eval()
     poses = np.zeros((0, 18, 3), dtype=np.float32)
     with torch.no_grad():
-        for idx, data_dict in enumerate(demo_dataset):
+        for idx in range(0, len(demo_dataset)):
+            data_dict = demo_dataset[idx]
             logger.info(f'Visualized sample index: \t{idx + 1}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
             logger.info('detected: {}'.format(len(pred_dicts[0]['pred_boxes'])))
             V.draw_scenes(
-                points=data_dict['points'][:, 1:4], #point_colors=data_dict['points'][:, 4:7],
+                #points=data_dict['points'][:, 1:4],
                 #points=data_dict['voxels'][..., :3].view((-1, 3)),
-                #ref_boxes=pred_dicts[0]['pred_boxes'],
-                #points=data_dict['point_coords'][:, 1:], 
-                #point_colors=pred_dicts[0]['part_segmentation'][:, 3:],
+                points=data_dict['point_coords'][:, 1:], 
+                #point_colors=pred_dicts[0]['part_segmentation'],
                 #normals=pred_dicts[0]['normals'], 
-                ref_poses=pred_dicts[0]['pose_estimation'], #gt_poses=data_dict['gt_poses'][0],
-                
+                #ref_boxes=pred_dicts[0]['pred_boxes'], 
+                ref_poses=pred_dicts[0]['pose_estimation'],
             )
 
             poses = np.concatenate([poses, pred_dicts[0]['pose_estimation'].cpu().numpy()], axis=0)

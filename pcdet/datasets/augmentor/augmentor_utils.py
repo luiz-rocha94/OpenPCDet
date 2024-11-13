@@ -285,6 +285,59 @@ def global_frustum_dropout_right(gt_boxes, points, intensity_range):
     return gt_boxes, points
 
 
+def global_frustum_dropout_backward(gt_boxes, points, intensity_range):
+    """
+    Args:
+        gt_boxes: (N, 7), [x, y, z, dx, dy, dz, heading, [vx], [vy]],
+        points: (M, 3 + C),
+        intensity: [min, max]
+    Returns:
+    """
+    intensity = np.random.uniform(intensity_range[0], intensity_range[1])
+    
+    threshold = np.max(points[:, 0]) - intensity * (np.max(points[:, 0]) - np.min(points[:, 0]))
+    points = points[points[:, 0] < threshold]
+    gt_boxes = gt_boxes[gt_boxes[:, 0] < threshold]
+    
+    return gt_boxes, points
+
+
+def global_frustum_dropout_forward(gt_boxes, points, intensity_range):
+    """
+    Args:
+        gt_boxes: (N, 7), [x, y, z, dx, dy, dz, heading, [vx], [vy]],
+        points: (M, 3 + C),
+        intensity: [min, max]
+    Returns:
+    """
+    intensity = np.random.uniform(intensity_range[0], intensity_range[1])
+    
+    threshold = np.min(points[:, 0]) + intensity * (np.max(points[:, 0]) - np.min(points[:, 0]))
+    points = points[points[:, 0] > threshold]
+    gt_boxes = gt_boxes[gt_boxes[:, 0] > threshold]
+    
+    return gt_boxes, points
+
+
+def global_frustum_dropout_softmax(gt_boxes, points, intensity_range):
+    """
+    Args:
+        gt_boxes: (N, 7), [x, y, z, dx, dy, dz, heading, [vx], [vy]],
+        points: (M, 3 + C),
+        intensity: [min, max]
+    Returns:
+    """
+    intensity = np.random.randint(intensity_range[0], intensity_range[1])
+    threshold = 1 - (points[:, 0] - np.min(points[:, 0])) / (np.max(points[:, 0]) - np.min(points[:, 0]))
+    threshold *= intensity
+    p = np.exp(threshold)/np.sum(np.exp(threshold))
+    idx = np.random.choice(len(points), len(points) // 100, replace=False, p=p)
+    points = points[idx]
+    #gt_boxes = gt_boxes[gt_boxes[:, 0] > threshold]
+    
+    return gt_boxes, points
+
+
 def local_scaling(gt_boxes, points, scale_range):
     """
     Args:
@@ -657,3 +710,38 @@ def local_pyramid_swap(gt_boxes, points, prob, max_num_pts, pyramids=None):
             points_res = np.concatenate(points_res, axis=0)
             points = np.concatenate([remain_points, points_res], axis=0)
     return gt_boxes, points
+
+
+def lidar_noise(points, max_r, max_theta, max_phi, co_range, ca_range):
+    points2 = points.copy()
+    co = np.random.uniform(co_range[0], co_range[1]) # x
+    ca = np.random.uniform(ca_range[0], ca_range[1]) # z
+    co = np.float32(co)
+    ca = np.float32(ca)
+    points2[..., 0] += co
+    points2[..., 2] -= ca
+
+    max_noise = np.array([[max_r,
+                           np.deg2rad(max_theta),
+                           np.deg2rad(max_phi)]], dtype=np.float32)
+    noise = np.random.uniform(-1, 1, points2.shape).astype(np.float32) # [r, theta, phi]
+    noise = max_noise * noise
+    noise[..., 0] = (max_r - 1)*(noise[..., 0] + 1)/2 + 1
+
+    r = np.sqrt(np.sum(np.power(points2, 2), axis=-1))
+    x, y, z = points2[..., 0], points2[..., 1], points2[..., 2]
+    theta = np.arctan2(y, x)
+    phi = np.arccos(z / r)
+
+    r = r ** noise[..., 0]
+    theta += noise[..., 1]
+    phi += noise[..., 2]
+
+    points2[..., 0] = r * np.cos(theta) * np.sin(phi)
+    points2[..., 1] = r * np.sin(theta) * np.sin(phi)
+    points2[..., 2] = r * np.cos(phi)
+
+    points2[..., 0] -= co
+    points2[..., 2] += ca
+
+    return points2

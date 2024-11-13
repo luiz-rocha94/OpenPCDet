@@ -39,6 +39,21 @@ DATA_AUGMENTOR:
 
         - NAME: random_world_scaling
           WORLD_SCALE_RANGE: [0.95, 1.05]
+         
+        - NAME: random_world_translation
+          NOISE_TRANSLATE_STD: [1, 1, 0]
+          
+        - NAME: raycast_noise
+          R_ERR: 1.05 # erro de distância.
+          H_RES: 0.6 # resolução horizontal em º.
+          V_RES: 0.6 # resolução vertical em º.
+          CO: [ 8.5, 9.5 ] # distância da instalação em m.
+          CA: [ 1.4, 1.6 ] # altura da instalação em m.
+        
+        - NAME: random_world_frustum_dropout
+          INTENSITY_RANGE: [5, 10]
+          DIRECTION: ['softmax']
+          
 
 DATA_PROCESSOR:
     - NAME: mask_points_and_boxes_outside_range

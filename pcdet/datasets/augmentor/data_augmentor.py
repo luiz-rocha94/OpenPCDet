@@ -167,6 +167,10 @@ class DataAugmentor(object):
                 
         if 'roi_boxes' in data_dict.keys():
             data_dict['roi_boxes'][:, :3] += noise_translate
+        if 'gt_poses' in data_dict.keys():
+            gt_poses = data_dict['gt_poses'].reshape(-1, 3)
+            gt_poses[:, :3] += noise_translate
+            data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
         
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
@@ -232,7 +236,7 @@ class DataAugmentor(object):
         intensity_range = config['INTENSITY_RANGE']
         gt_boxes, points = data_dict['gt_boxes'], data_dict['points']
         for direction in config['DIRECTION']:
-            assert direction in ['top', 'bottom', 'left', 'right']
+            assert direction in ['top', 'bottom', 'left', 'right', 'forward', 'backward', 'softmax']
             gt_boxes, points = getattr(augmentor_utils, 'global_frustum_dropout_%s' % direction)(
                 gt_boxes, points, intensity_range,
             )
@@ -303,6 +307,15 @@ class DataAugmentor(object):
             new_imgs.append(img)
 
         data_dict["camera_imgs"] = new_imgs
+        return data_dict
+    
+    def raycast_noise(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.raycast_noise, config=config)
+        points = data_dict['points']
+        points[:, :3] = augmentor_utils.lidar_noise(points[:, :3], config.R_ERR, config.H_RES, config.V_RES,
+                                                    config.CO, config.CA)
+        data_dict['points'] = points
         return data_dict
 
     def forward(self, data_dict):

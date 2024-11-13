@@ -145,11 +145,7 @@ class VPSPose(Detector3DTemplate):
             point_dist_preds = torch.linalg.norm(batch_dict['point_normal_preds'][bs_mask].view(-1, 3), axis=-1) < post_process_cfg.DIST_THRESH
             point_coords = batch_dict['point_coords'][bs_mask][:, 1:]
             point_part_offset = batch_dict['point_part_offset'][bs_mask]
-            point_normal_preds = batch_dict['point_normal_preds'][bs_mask]
-            #point_normal_preds = batch_dict['point_normal_labels'][bs_mask]
-            point_normal_labels = batch_dict['point_normal_labels'][bs_mask]
-            point_part_labels = batch_dict['point_part_labels'][bs_mask]
-            
+            point_normal_preds = batch_dict['point_normal_preds'][bs_mask]                       
             if post_process_cfg.get('OUTPUT_PART_SEGMENTATION'):
                 record_dict.update({'part_segmentation': point_part_offset})
             
@@ -157,12 +153,14 @@ class VPSPose(Detector3DTemplate):
                 record_dict.update({'normals': point_normal_preds})
             
             if post_process_cfg.get('OUTPUT_PEARSON_SCORES'):
+                point_part_labels = batch_dict['point_part_labels'][bs_mask]
                 pearson_coef = vps_pose_utils.pearson(point_part_labels, point_part_offset)
                 pearson_points = torch.cat((point_coords, pearson_coef), dim=1)
                 pearson_scores = vps_pose_utils.pearson_in_boxes(pearson_points, final_boxes)         
                 record_dict.update({'pearson_scores': pearson_scores})  
             
             if post_process_cfg.get('OUTPUT_NORMALS_SCORES'):
+                point_normal_labels = batch_dict['point_normal_labels'][bs_mask]
                 normals_scores = torch.linalg.norm((point_normal_labels - point_normal_preds).view(1, -1, 3), axis=-1).mean(1)
                 record_dict.update({'normals_scores': normals_scores})     
             
