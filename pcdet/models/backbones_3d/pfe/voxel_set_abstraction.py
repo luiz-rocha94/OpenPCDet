@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from ....ops.pointnet2.pointnet2_stack import pointnet2_modules as pointnet2_stack_modules
 from ....ops.pointnet2.pointnet2_stack import pointnet2_utils as pointnet2_stack_utils
+from ....ops.roiaware_pool3d import roiaware_pool3d_utils
 from ....utils import common_utils
 
 
@@ -253,6 +254,17 @@ class VoxelSetAbstraction(nn.Module):
         for bs_idx in range(batch_size):
             bs_mask = (batch_indices == bs_idx)
             sampled_points = src_points[bs_mask].unsqueeze(dim=0)  # (1, N, 3)
+            
+            """
+            if self.training:
+                box_preds = batch_dict['gt_boxes'][bs_idx, :, :7].unsqueeze(dim=0) # (1, T, 7)
+            else:
+                box_preds = batch_dict['batch_box_preds'][bs_idx].unsqueeze(dim=0) # (1, T, 7)
+            box_idxs = roiaware_pool3d_utils.points_in_boxes_gpu(sampled_points, box_preds)
+            centers = box_preds[0, box_idxs, :3]
+            sampled_points = sampled_points - centers
+            #"""
+            
             if self.model_cfg.SAMPLE_METHOD == 'FPS':
                 cur_pt_idxs = pointnet2_stack_utils.farthest_point_sample(
                     sampled_points[:, :, 0:3].contiguous(), self.model_cfg.NUM_KEYPOINTS

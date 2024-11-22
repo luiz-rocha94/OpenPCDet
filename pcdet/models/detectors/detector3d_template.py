@@ -20,10 +20,20 @@ class Detector3DTemplate(nn.Module):
         self.class_names = dataset.class_names
         self.register_buffer('global_step', torch.LongTensor(1).zero_())
 
+        """        
+        #RuntimeError: mat1 and mat2 shapes cannot be multiplied (512x608 and 864x128)
+        modules = {'VFE':'vfe', 'BACKBONE_3D':'backbone_3d', 
+                   'MAP_TO_BEV':'map_to_bev_module', 'PFE':'pfe', 
+                   'BACKBONE_2D':'backbone_2d', 'DENSE_HEAD':'dense_head', 
+                   'POINT_HEAD':'point_head', 'ROI_HEAD':'roi_head'}
+        self.module_topology = [modules[key] for key in model_cfg.keys() if modules.get(key)]
+        #"""
+        #"""
         self.module_topology = [
             'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
             'backbone_2d', 'dense_head',  'point_head', 'roi_head'
         ]
+        #"""
 
     @property
     def mode(self):
