@@ -389,8 +389,8 @@ if __name__ == '__main__':
     from pathlib import Path
     from easydict import EasyDict
     if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
-        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
+        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
         create_ubc3v_infos(
         dataset_cfg=dataset_cfg,
         class_names=['Pedestrian'],

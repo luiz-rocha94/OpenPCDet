@@ -138,7 +138,7 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     right_index = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     left_index = [0, 1, 2, 3, 4, 5, 7, 6, 10, 11, 8, 9, 15, 16, 17, 12, 13, 14]
     #joint_index = np.stack([right_index if x < 0 else left_index for x in np.sin(angle)])
-    joint_index = np.tile(left_index, len(posture))
+    joint_index = np.tile(left_index, (len(posture), 1))
     index = np.mgrid[:len(posture), :len(names)][0]
     posture = posture[index, joint_index]
 
