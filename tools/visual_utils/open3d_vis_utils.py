@@ -49,7 +49,7 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     vis.create_window()
 
     vis.get_render_option().point_size = 4.0
-    vis.get_render_option().background_color = np.zeros(3)
+    vis.get_render_option().background_color = np.ones(3)
 
     # draw origin
     if draw_origin:
@@ -61,7 +61,7 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
 
     vis.add_geometry(pts)
     if point_colors is None:
-        pts.colors = o3d.utility.Vector3dVector(np.ones((points.shape[0], 3)))
+        pts.colors = o3d.utility.Vector3dVector(np.zeros((points.shape[0], 3)))
     else:
         if isinstance(point_colors, torch.Tensor):
             point_colors = point_colors.cpu().numpy()

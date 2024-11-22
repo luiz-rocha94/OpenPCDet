@@ -44,14 +44,14 @@ DATA_AUGMENTOR:
           NOISE_TRANSLATE_STD: [1, 1, 0]
           
         - NAME: raycast_noise
-          R_ERR: 1.05 # erro de distância.
-          H_RES: 0.6 # resolução horizontal em º.
-          V_RES: 0.6 # resolução vertical em º.
+          R_ERR: 1.01 # erro de distância.
+          H_RES: 0.3 # resolução horizontal em º.
+          V_RES: 0.3 # resolução vertical em º.
           CO: [ 8.5, 9.5 ] # distância da instalação em m.
           CA: [ 1.4, 1.6 ] # altura da instalação em m.
         
         - NAME: random_world_frustum_dropout
-          INTENSITY_RANGE: [5, 10]
+          INTENSITY_RANGE: [2, 4]
           DIRECTION: ['softmax']
           
 
