@@ -44,21 +44,45 @@ def points_transform(points, rotation, translation):
     return new_points
 
 
-def get_bouding_box(points, joints):
+def get_angle(joints):
     names = list(get_joints_name().keys())
-    center = joints[names.index('Hip')]
-    half = joints[names.index('RHip')] - joints[names.index('LHip')]
-    angle = np.arctan(half[1]/half[0])
+    if len(joints.shape) == 2:
+        joints = joints[None, :, :]
+    center = joints[:, names.index('Hip')]
+    dist = joints[:, names.index('LHip')] - joints[:, names.index('RHip')]
+    angle = np.arctan(dist[:, 1]/dist[:, 0])
     angle = angle + (angle < 0)*2*np.pi
-    forward = np.abs(center[0]) >= np.abs(center[ 1])
+    forward = np.abs(center[:, 0]) >= np.abs(center[:, 1])
     direction = -1*(angle <= np.pi/2) + 1*(angle > np.pi/2)
-    x, y = np.sign(center[0])*np.pi/2, np.sign(center[1])*np.pi/2
+    x, y = np.sign(center[:, 0])*np.pi/2, np.sign(center[:, 1])*np.pi/2
     angle = angle + forward*direction*x + ~forward*y
     angle = angle + (angle < 0)*2*np.pi - (angle >= 2*np.pi)*2*np.pi
+    return angle
+
+
+def get_angle2(joints, right=True):
+    names = list(get_joints_name().keys())
+    if len(joints.shape) == 2:
+        joints = joints[None, :, :]
+    center = joints[:, names.index('Hip')].copy()
+    rhip = joints[:, names.index('RHip')].copy()
+    lhip = joints[:, names.index('LHip')].copy()
+    rhip -= center
+    lhip -= center
+    rhip[:, 2] = 1
+    lhip[:, 2] = 1
+    dist = np.cross(rhip, lhip) if right else np.cross(lhip, rhip)
+    angle = np.arctan2(dist[:, 1], dist[:, 0]) # y / x
+    angle = angle + (angle < 0)*2*np.pi # [0, 2pi]
+    return angle
+
+
+def get_bouding_box(points, joints):
+    angle = get_angle2(joints, False)
     max_, min_ = points.max(0), points.min(0)
     lwh = max_ - min_
     center = min_ + lwh/2
-    box3d = np.concatenate([center, lwh[[1,0,2]], angle[np.newaxis]], 
+    box3d = np.concatenate([center, lwh[[1,0,2]], angle], 
                            axis=0).astype(np.float32)
     return box3d
     
@@ -92,6 +116,32 @@ def get_annos(sequence_path, cams=[], name='*.png'):
                         for key in names.values()]) for joints in posture])
     posture[:, :, [1, 2]] = posture[:, :, [2, 1]]
     posture = posture/100 # cm to m
+    
+    """
+    # Fix joint side   
+    names = list(names.keys())
+    center = posture[:, names.index('Hip')].copy()
+    rhip = posture[:, names.index('RHip')].copy()
+    angle = get_angle2(posture)
+    for i in range(len(angle)):
+        rot = Rotation.from_euler('z', -angle[i])
+        #posture[i] -= center[i]
+        #posture[i] = rot.apply(posture[i]).astype(np.float32)
+        rhip[i] -= center[i]
+        rhip[i] = rot.apply(rhip[i]).astype(np.float32)
+    
+    angle = np.arctan2(rhip[:, 1], rhip[:, 0]) # y / x
+    angle = angle + (angle < 0)*2*np.pi # [0, 2pi]
+    np.sum(np.sin(angle) < 0) 
+    """    
+    
+    right_index = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    left_index = [0, 1, 2, 3, 4, 5, 7, 6, 10, 11, 8, 9, 15, 16, 17, 12, 13, 14]
+    #joint_index = np.stack([right_index if x < 0 else left_index for x in np.sin(angle)])
+    joint_index = np.tile(left_index, len(posture))
+    index = np.mgrid[:len(posture), :len(names)][0]
+    posture = posture[index, joint_index]
+
     annos['Index'] = [[annos[key][i]['idx'] for key in annos.keys()][0] 
                       for i in range(len(posture))]
     annos['Posture'] = posture
@@ -211,7 +261,14 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
                  for key, value in zip(colors_dict, np.cumsum([0]+lens)[:-1])}
     cmap = cm.ScalarMappable(cmap=cmap, norm=Normalize(vmin=0, vmax=1))
     dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
+    src_cmap = plt.cm.colors.ListedColormap(src_map)
+    src_cmap = plt.cm.ScalarMappable(cmap=src_cmap, norm=Normalize(vmin=0, vmax=1))
     if plot:
+        fig, ax = plt.subplots(figsize=(2, 6), layout='constrained')
+        cbar = fig.colorbar(src_cmap, cax=ax, orientation='vertical', ticks=np.cumsum(lens)/len(src_map))
+        cbar.ax.set_yticklabels(list(colors_dict)) 
+        plt.show()
+        
         fig, ax = plt.subplots(figsize=(2, 6), layout='constrained')
         cbar = fig.colorbar(cmap, cax=ax, orientation='vertical', ticks=space_range[1:])
         cbar.ax.set_yticklabels(list(colors_dict)) 
@@ -289,11 +346,11 @@ def get_joints_name():
     new_keys = {0:'Head', 1:'Neck', 
                 2:'Spine2', 3:'Spine1', 4:'Spine', 
                 5:'Hip', 
-                6:'RHip', 7:'LHip', 
-                8:'RKnee', 9:'RFoot', 
-                10:'LKnee', 11:'LFoot', 
-                12:'RShoulder', 13:'RElbow', 14:'RHand', 
-                15:'LShoulder', 16:'LElbow', 17:'LHand'}
+                6:'LHip', 7:'RHip', 
+                8:'LKnee', 9:'LFoot', 
+                10:'RKnee', 11:'RFoot', 
+                12:'LShoulder', 13:'LElbow', 14:'LHand', 
+                15:'RShoulder', 16:'RElbow', 17:'RHand'}
     for old_key, new_key in zip(old_keys, new_keys.values()):
         names[new_key] = old_key
     return names
@@ -320,11 +377,13 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
                                     lines=o3d.utility.Vector2iVector(lines))
     line_set.paint_uniform_color([0, 1, 0])
     geometries.append(line_set)
+    # left
     lines = [( 5,  6), ( 6,  8), ( 8,  9), ( 1, 12), (12, 13), (13, 14)]
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                     lines=o3d.utility.Vector2iVector(lines))
     line_set.paint_uniform_color([1, 0, 0])
     geometries.append(line_set)
+    # right
     lines = [( 5,  7), ( 7, 10), (10, 11), (1, 15), (15, 16), (16, 17)]
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                     lines=o3d.utility.Vector2iVector(lines))
@@ -345,15 +404,19 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     norm.points = o3d.utility.Vector3dVector(points + normals)
     ids = [(i,i) for i in range(len(points))]
     vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pcd, norm, ids)
-    geometries.append(vectors)
+    #geometries.append(vectors)
     
     center = box3d[0:3]
+    #center = joints[5]
     lwh = box3d[3:6]
     angle = box3d[6]
     axis_angles = np.array([0, 0, angle + 1e-10])
     rot = o3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
     oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
     line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
+    lines = np.asarray(line_set.lines)
+    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
     line_set.paint_uniform_color([0, 255, 0])
     geometries.append(line_set)
     
@@ -362,7 +425,7 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(normal), 
                                     lines=o3d.utility.Vector2iVector([(0, 1)]))
     line_set.paint_uniform_color([255, 0, 0])
-    geometries.append(line_set)    
+    #geometries.append(line_set)    
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
@@ -426,7 +489,7 @@ if __name__ == '__main__':
     joints = anno['Posture']
     box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    colors = apply_color_map(colors, plot=False)
+    colors = apply_color_map(colors, plot=True)
     normals, _ = get_normals(points, colors[:, :3], joints)
     draw_point_cloud(points, colors[:, :3], normals, joints, box3d)
     #map_files(subset_path, save_path, num_workers=4)
