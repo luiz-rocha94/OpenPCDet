@@ -58,10 +58,13 @@ def pearson_in_boxes(points, input_boxes, point_indices):
 
 def jpe(pred_joints, gt_joints):
     num_objects, num_joints, _ = gt_joints.shape
-    output_box = torch.zeros((num_objects, num_joints), dtype=gt_joints.dtype, device=gt_joints.device)
-    for i in range(num_objects):
-        output_box[i] = torch.linalg.norm(gt_joints[i] - pred_joints[i], dim=-1)
+    if len(pred_joints):
+        dist = torch.linalg.norm(gt_joints[:, None] - pred_joints[None], dim=-1)
+        output_box = dist[torch.arange(num_objects), dist.sum(-1).min(-1)[1]]
+    else:
+        output_box = torch.linalg.norm(gt_joints, dim=-1)
     return output_box
+
 
 def hue_joint_index(rgb):
     # [0,1]
