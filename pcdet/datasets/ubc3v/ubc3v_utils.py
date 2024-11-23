@@ -78,7 +78,7 @@ def get_angle2(joints, right=True):
 
 
 def get_bouding_box(points, joints):
-    angle = get_angle2(joints, False)
+    angle = get_angle2(joints, True)
     max_, min_ = points.max(0), points.min(0)
     lwh = max_ - min_
     center = min_ + lwh/2
@@ -132,8 +132,7 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     
     angle = np.arctan2(rhip[:, 1], rhip[:, 0]) # y / x
     angle = angle + (angle < 0)*2*np.pi # [0, 2pi]
-    np.sum(np.sin(angle) < 0) 
-    """    
+    np.sum(np.sin(angle) < 0)     
     
     right_index = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     left_index = [0, 1, 2, 3, 4, 5, 7, 6, 10, 11, 8, 9, 15, 16, 17, 12, 13, 14]
@@ -141,6 +140,7 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     joint_index = np.tile(left_index, (len(posture), 1))
     index = np.mgrid[:len(posture), :len(names)][0]
     posture = posture[index, joint_index]
+    """
 
     annos['Index'] = [[annos[key][i]['idx'] for key in annos.keys()][0] 
                       for i in range(len(posture))]
