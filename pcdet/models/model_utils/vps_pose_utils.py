@@ -171,9 +171,11 @@ def pose_estimation(points, input_boxes, point_indices, point_part=None,  point_
     for batch_index in range(batch_size):
         for i in range(num_objects):
             object_indices = point_indices[batch_index] == i
-            box_points = points[batch_index, :, :3]
-            box_index = joint_index[batch_index, :, 0]
-            box_dist = point_dist[batch_index, :, 0]
+            m_pose = points[batch_index, :, :3].view(-1, num_joints, 3)
+            m_pose = m_pose.mean(0) # m_pose[object_indices[::18]].mean(0)
+            box_points = points[batch_index, :, :3] # points[batch_index, object_indices, :3]
+            box_index = joint_index[batch_index, :, 0] # joint_index[batch_index, object_indices, 0]
+            box_dist = point_dist[batch_index, :, 0] # point_dist[batch_index, object_indices, 0]
             index_mask = torch.logical_and(box_index != -1, box_dist) 
             box_points = box_points[index_mask]
             box_index = box_index[index_mask]
@@ -185,6 +187,8 @@ def pose_estimation(points, input_boxes, point_indices, point_part=None,  point_
             normalizer = mask.sum(1)
             pose = pose.sum(1) / normalizer
             torch.nan_to_num(pose, out=pose)
+            m_mask = (pose == 0).all(-1)
+            pose[m_mask] = m_pose[m_mask]
             output_box[batch_index, i] = pose
 
     return output_box    

@@ -331,7 +331,7 @@ def global_frustum_dropout_softmax(gt_boxes, points, intensity_range):
     threshold = 1 - (points[:, 0] - np.min(points[:, 0])) / (np.max(points[:, 0]) - np.min(points[:, 0]))
     threshold *= intensity
     p = np.exp(threshold)/np.sum(np.exp(threshold))
-    idx = np.random.choice(len(points), len(points) // 100, replace=False, p=p)
+    idx = np.random.choice(len(points), len(points) // 10, replace=False, p=p)
     points = points[idx]
     #gt_boxes = gt_boxes[gt_boxes[:, 0] > threshold]
     

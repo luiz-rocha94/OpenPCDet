@@ -147,7 +147,7 @@ class UBC3VDataset(DatasetTemplate):
                 'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
                 'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples),
                 'pearson_scores': np.zeros(num_samples, np.float32), 'normals_scores': np.zeros(num_samples, np.float32),
-                'jpe_scores': np.zeros(num_samples, np.float32), 'jpa_scores': np.zeros(num_samples, np.float32)
+                'jpe_scores': np.zeros((num_samples, 18), np.float32), 'jap_scores': np.zeros(num_samples, np.float32)
             }
             return ret_dict
 
