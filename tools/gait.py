@@ -3,6 +3,7 @@ import glob
 from pathlib import Path
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from scipy.spatial.transform import Rotation
 
 try:
     import open3d
@@ -82,7 +83,7 @@ def parse_config():
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default=r'D:\mestrado\OpenPCDet\data\xenomatix\seq2',
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='cfgs/xenomatix_models/vps_pose_latest.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='D:/mestrado/OpenPCDet/output/ubc3v_models/vps_pose/default/ckpt/latest_model.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.ply', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -115,33 +116,35 @@ def main():
     model.eval()
     poses = np.zeros((0, 18, 3), dtype=np.float32)
     with torch.no_grad():
-        for idx in range(0, len(demo_dataset)):
+        for idx in range(0, 70):
             data_dict = demo_dataset[idx]
-            logger.info(f'Visualized sample index: \t{idx + 1}')
+            logger.info(f'Visualized sample index: \t{idx}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
             logger.info('detected: {}'.format(len(pred_dicts[0]['pred_boxes'])))
+            #"""
             V.draw_scenes(
                 #points=data_dict['points'][:, 1:4],
                 #points=data_dict['voxels'][..., :3].view((-1, 3)),
                 points=data_dict['point_coords'][:, 1:], 
-                #point_colors=pred_dicts[0]['part_segmentation'],
+                point_colors=pred_dicts[0]['part_segmentation'],
                 #normals=pred_dicts[0]['normals'], 
-                #ref_boxes=pred_dicts[0]['pred_boxes'], 
+                ref_boxes=pred_dicts[0]['pred_boxes'], 
                 ref_poses=pred_dicts[0]['pose_estimation'],
             )
+            #"""
 
             poses = np.concatenate([poses, pred_dicts[0]['pose_estimation'].cpu().numpy()], axis=0)
             if not OPEN3D_FLAG:
                 mlab.show(stop=True)
 
-    logger.info('Demo done.')
-    right = poses[:, 6] - poses[:, 7]  
-    left = poses[:, 9] - poses[:, 10] 
+    rot = Rotation.from_euler('x', np.pi)
+    right = rot.apply(poses[:, 10] - poses[:, 7]).astype(np.float32)  
+    left = rot.apply(poses[:, 8] - poses[:, 6]).astype(np.float32) 
     t = np.linspace(0, 100, len(poses), dtype=np.int32)
-    right_a = np.rad2deg(np.arctan2(right[:, 2], right[:, 1]))
-    left_a = np.rad2deg(np.arctan2(left[:, 2], left[:, 1]))
+    right_a = np.rad2deg(np.arctan2(right[:, 1], right[:, 2]))
+    left_a = np.rad2deg(np.arctan2(left[:, 1], left[:, 2]))
     left_interpolation = interp1d(t, left_a, kind = "cubic")
     right_interpolation = interp1d(t, right_a, kind = "cubic")
     t = np.linspace(0, 100, 100, dtype=np.int32)
@@ -154,6 +157,18 @@ def main():
     plt.ylabel('angle [°]')
     plt.legend()
     plt.show()
+    
+    right_n = 1 + (right_a_interpolated - right_a_interpolated.min())/(right_a_interpolated.max() - right_a_interpolated.min())
+    left_n = 1 + (left_a_interpolated - left_a_interpolated.min())/(left_a_interpolated.max() - left_a_interpolated.min())
+    si_n = 200*(right_n - left_n)/(right_n + left_n)
+    plt.plot(t, si_n)
+    plt.title('Hip Flexion')
+    plt.xlabel('gait [%]')
+    plt.ylabel('SI Norm [%]')
+    plt.show()
+
+    logger.info('Gait done.')
+    
     
 
 if __name__ == '__main__':

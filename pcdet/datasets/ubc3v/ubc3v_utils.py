@@ -74,6 +74,12 @@ def get_angle2(joints, right=True):
     dist = np.cross(rhip, lhip) if right else np.cross(lhip, rhip)
     angle = np.arctan2(dist[:, 1], dist[:, 0]) # y / x
     angle = angle + (angle < 0)*2*np.pi # [0, 2pi]
+    origin = np.zeros((2,3))
+    dest = np.concatenate([rhip, lhip, dist])[:, :2].T
+    plt.quiver(*origin, *dest, color=['r','b','g'], scale=0.75)
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.show()
     return angle
 
 
@@ -404,7 +410,7 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     norm.points = o3d.utility.Vector3dVector(points + normals)
     ids = [(i,i) for i in range(len(points))]
     vectors = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pcd, norm, ids)
-    #geometries.append(vectors)
+    geometries.append(vectors)
     
     center = box3d[0:3]
     #center = joints[5]
@@ -428,9 +434,9 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     #geometries.append(line_set)    
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
-    geometries.append(coords)
+    #geometries.append(coords)
     o3d.visualization.draw_geometries(geometries, width=1080, height=1080, 
-                                      lookat=center, up=[0,0,1], front=[0,1,0], zoom=0.6)
+                                      lookat=center, up=[0,0,1], front=[0,-1,0], zoom=0.6)
 
 
 frame_filter = lambda x: int(''.join(filter(str.isdigit, x.parts[-5]+x.parts[-1])))
@@ -475,7 +481,7 @@ if __name__ == '__main__':
     parser.add_argument('--subset_path', type=str, default='easy-pose')
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
-    parser.add_argument('--cam', type=str, default='Cam3')
+    parser.add_argument('--cam', type=str, default=None)
     parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
     args = parser.parse_args()
     

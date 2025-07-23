@@ -2,9 +2,9 @@
 #cuda==12.1.1
 #cudnn==8.9.7
 #conda install conda-forge::cudatoolkit==11.8.0
---index-url https://download.pytorch.org/whl/cu121
-torch==2.2.0+cu121
-torchvision==0.17.0+cu121
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
 spconv-cu120==2.3.6
 numpy==1.26.3
 llvmlite==0.42.0

@@ -35,7 +35,7 @@ def get_coor_colors(obj_labels):
     return label_rgba
 
 
-def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, 
+def draw_scenes(points=None, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scores=None, 
                 point_colors=None, normals=None, ref_poses=None, gt_poses=None, joint_colors=[1, 0, 0], 
                 draw_origin=True):
     if isinstance(points, torch.Tensor):
@@ -55,14 +55,14 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref_scor
     if draw_origin:
         axis_pcd = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
         vis.add_geometry(axis_pcd)
-
-    pts = o3d.geometry.PointCloud()
-    pts.points = o3d.utility.Vector3dVector(points[:, :3])
-
-    vis.add_geometry(pts)
-    if point_colors is None:
+    
+    if points is not None:
+        pts = o3d.geometry.PointCloud()
+        pts.points = o3d.utility.Vector3dVector(points[:, :3])
         pts.colors = o3d.utility.Vector3dVector(np.zeros((points.shape[0], 3)))
-    else:
+        vis.add_geometry(pts)
+    
+    if point_colors is not None:
         if isinstance(point_colors, torch.Tensor):
             point_colors = point_colors.cpu().numpy()
         if point_colors.shape[1] == 4:
