@@ -7,6 +7,7 @@ class PartVFE(VFETemplate):
     def __init__(self, model_cfg, num_point_features, **kwargs):
         super().__init__(model_cfg=model_cfg)
         self.ch = self.model_cfg.NUM_POINT_FEATURES
+        self.color_mode = self.model_cfg.get('COLOR_MODE', 'RGB')
 
     def get_output_feature_dim(self):
         return self.ch[0]
@@ -27,12 +28,15 @@ class PartVFE(VFETemplate):
         features_mean = voxel_features[:, :, :].sum(dim=1, keepdim=False)
         normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
         features_mean = features_mean / normalizer
-        part_ids, row_ids = torch.mode(voxel_features[..., -1], 1)
-        row_ids[part_ids == 0] = 0
         batch_dict['voxel_features']    = features_mean[:, :self.ch[0]].contiguous()
         if len(self.ch) >= 2:
+            part_ids, row_ids = torch.mode(voxel_features[..., -1], 1)
+            #row_ids[part_ids == 0] = 0
             batch_dict['voxel_colors']  = voxel_features[torch.arange(0, len(row_ids)), row_ids, self.ch[0]:self.ch[1]]
             #batch_dict['voxel_colors']  = features_mean[:, self.ch[0]:self.ch[1]].contiguous()
+            if self.color_mode == 'INDEX':
+                batch_dict['voxel_colors_index']  = part_ids.view(-1, 1)  
+            
         if len(self.ch) >= 3:
             batch_dict['voxel_normals'] = features_mean[:, self.ch[1]:self.ch[2]].contiguous()
         if len(self.ch) >= 4:

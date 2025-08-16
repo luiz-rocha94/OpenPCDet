@@ -249,6 +249,7 @@ class VoxelSetAbstraction(nn.Module):
             raise NotImplementedError
         keypoints_list = []
         colors_list = []
+        colors_index_list = []
         normals_list = []
         joints_list = []
         for bs_idx in range(batch_size):
@@ -281,6 +282,10 @@ class VoxelSetAbstraction(nn.Module):
                     sampled_colors = batch_dict['voxel_colors'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
                     colors_list.append(sampled_colors)
                 
+                if self.model_cfg.get('SAMPLE_COLORS_INDEX'):
+                    sampled_colors_index = batch_dict['voxel_colors_index'][bs_mask][cur_pt_idxs[0]].unsqueeze(dim=0)
+                    colors_index_list.append(sampled_colors_index)
+                
                 if self.model_cfg.get('SAMPLE_NORMALS'):
                     gt_poses = batch_dict['gt_poses'][bs_idx]
                     sampled_normals = gt_poses[:, None, :, :] - keypoints[:, :, None, :]
@@ -309,6 +314,10 @@ class VoxelSetAbstraction(nn.Module):
         if self.model_cfg.get('SAMPLE_COLORS'):
             colors = torch.cat(colors_list, dim=0).view(-1, 3)  # (B, M, 3) or (N1 + N2 + ..., 4)
             batch_dict['point_part_labels'] = colors
+        
+        if self.model_cfg.get('SAMPLE_COLORS_INDEX'):
+            index = torch.cat(colors_index_list, dim=0).view(-1, 1)  # (B, M, 3) or (N1 + N2 + ..., 4)
+            batch_dict['point_part_labels_index'] = index
         
         if self.model_cfg.get('SAMPLE_NORMALS'):
             normals = torch.cat(normals_list, dim=0).view(-1, 

@@ -62,11 +62,11 @@ class DemoDataset(DatasetTemplate):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/ubc3v_models/vps_pose.yaml',
+    parser.add_argument('--cfg_file', type=str, default='cfgs/ubc3v_models/vps_pose_colors.yaml',
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='D:/mestrado/OpenPCDet/output/ubc3v_models/vps_pose/default/ckpt/latest_model.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='D:/mestrado/OpenPCDet/output/ubc3v_models/vps_pose_colors/default/ckpt/latest_model.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -120,14 +120,14 @@ def main():
                 #points=data_dict['voxels'][..., :3].view((-1, 3)),
                 #points=data_dict['points'][:, 1:4], point_colors=data_dict['points'][:, 4:7],
                 points=data_dict['point_coords'][:, 1:],
-                point_colors=data_dict['point_part_labels'],
-                #point_colors=pred_dicts[0]['part_segmentation'],
-                normals=data_dict['point_normal_labels'].view(-1, 18, 3)[:, :],
-                #normals=pred_dicts[0]['normals'],#.view(-1, 18, 3)[:, idx % 18], 
-                gt_poses=data_dict['gt_poses'][0],
-                #ref_poses=pred_dicts[0]['pose_estimation'],
-                #ref_boxes=pred_dicts[0]['pred_boxes'], 
-                gt_boxes=data_dict['gt_boxes'][0]
+                #point_colors=data_dict['point_part_labels'],
+                point_colors=pred_dicts[0]['part_segmentation'],
+                #normals=data_dict['point_normal_labels'].view(-1, 18, 3)[:, :],
+                normals=pred_dicts[0]['normals'],#.view(-1, 18, 3)[:, idx % 18], 
+                #gt_poses=data_dict['gt_poses'][0],
+                ref_poses=pred_dicts[0]['pose_estimation'],
+                ref_boxes=pred_dicts[0]['pred_boxes'], 
+                #gt_boxes=data_dict['gt_boxes'][0]
             )
 
             if not OPEN3D_FLAG:
