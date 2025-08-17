@@ -498,7 +498,7 @@ if __name__ == '__main__':
     joints = anno['Posture']
     box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    colors = apply_color_map(colors, plot=True)
+    colors = apply_color_map(colors, plot=True, cmap='hsv')
     normals, _ = get_normals(points, colors[:, :3], joints)
     draw_point_cloud(points, colors[:, :3], normals, joints, box3d)
     #map_files(subset_path, save_path, num_workers=4)
