@@ -191,6 +191,7 @@ def get_points(anno, mapper):
 
 
 def get_color_maps(cmap='hsv', plot=False, **kwargs):
+    cmap = 'hsv' if cmap == 'src' else cmap
     src_map = np.array([[255, 106,   0], 
                         [255,   0,   0],
                         [255, 178, 127],
@@ -305,13 +306,15 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
 
 
 def apply_color_map(colors, **kwargs):
+    use_src = kwargs['cmap'] == 'src'
     src_map, dst_map, color_space, part_dict = get_color_maps(**kwargs)
     distances = pairwise_distances(colors, src_map)
     idx = np.argmin(distances, 1)
-    colors = np.concatenate([dst_map[idx], 1+idx[:, None]], axis=1).astype(np.float32)
+    color_map = src_map if use_src else dst_map
+    colors = np.concatenate([color_map[idx], 1+idx[:, None]], axis=1).astype(np.float32)
     if kwargs.get('part'):
         part_idx = part_dict[kwargs['part']]
-        colors[(colors != dst_map[part_idx]).any(1), :] = 0
+        colors[(colors != color_map[part_idx]).any(1), :] = 0
     return colors
 
 
