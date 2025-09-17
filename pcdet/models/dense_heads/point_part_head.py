@@ -21,7 +21,7 @@ class PointPartOffsetHead(PointIntraPartOffsetHead):
         pos_mask = self.forward_ret_dict['point_cls_labels'] > 0
         pos_normalizer = max(1, (pos_mask > 0).sum().item())
         
-        point_part_labels_index = self.forward_ret_dict['point_part_labels_index'].view(-1).type(torch.int64)
+        point_part_labels_index = self.forward_ret_dict['point_part_labels_index'].view(-1)
         point_part_preds = self.forward_ret_dict['point_part_preds']
         point_loss_part = F.cross_entropy(point_part_preds, point_part_labels_index, reduction='none')
         point_loss_part = (point_loss_part * pos_mask.float()).sum() / pos_normalizer

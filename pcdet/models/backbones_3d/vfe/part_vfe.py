@@ -3,17 +3,6 @@ import torch
 from .vfe_template import VFETemplate
 
 
-def histogram2D(voxel_class, num_classes):
-    N = voxel_class.size(0)
-    histogram = torch.zeros((N, num_classes), dtype=voxel_class.dtype, device=voxel_class.device)
-    for i in range(N):
-        row = voxel_class[i]
-        counts = torch.bincount(row, minlength=num_classes)
-        histogram[i] = counts
-    
-    return histogram
-
-
 class PartVFE(VFETemplate):
     def __init__(self, model_cfg, num_point_features, **kwargs):
         super().__init__(model_cfg=model_cfg)
@@ -39,14 +28,14 @@ class PartVFE(VFETemplate):
         features_mean = voxel_features[:, :, :].sum(dim=1, keepdim=False)
         normalizer = torch.clamp_min(voxel_num_points.view(-1, 1), min=1.0).type_as(voxel_features)
         features_mean = features_mean / normalizer
-        batch_dict['voxel_features']    = features_mean[:, :self.ch[0]].contiguous()
+        batch_dict['voxel_features'] = features_mean[:, :self.ch[0]].contiguous()
         if len(self.ch) >= 2:
             voxel_class = voxel_features[..., -1].long()
-            hist = histogram2D(voxel_class, 46)
-            part_ids = hist[:, 1:].argmax(dim=1).view(-1, 1) + 1 # 0 = background
-            col_ids = 1*(voxel_class == part_ids)
-            col_ids = col_ids.argmax(dim=1)
-            batch_dict['voxel_colors']  = voxel_features[torch.arange(0, len(col_ids)), col_ids, self.ch[0]:self.ch[1]]
+            part_ids, col_ids = torch.mode(voxel_class, 1)
+            part_mask = part_ids == 0 # background
+            part_ids[part_mask] = voxel_class[part_mask, 0] 
+            col_ids[part_mask] = 0
+            batch_dict['voxel_colors']  = voxel_features[torch.arange(0, len(col_ids)), col_ids, self.ch[0]:self.ch[1]].contiguous()
             #batch_dict['voxel_colors']  = features_mean[:, self.ch[0]:self.ch[1]].contiguous()
             if self.color_mode == 'INDEX':
                 batch_dict['voxel_colors_index']  = part_ids  
