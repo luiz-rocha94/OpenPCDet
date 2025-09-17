@@ -214,28 +214,29 @@ class UBC3VDataset(DatasetTemplate):
                 result_str += ap_result_str 
                 result_dict.update(ap_dict)
             elif eval_metric == 'pearson':
-                mean_pearson_scores = np.mean([anno['pearson_scores'].mean() for anno in eval_det_annos])
+                mean_pearson_scores = np.concatenate([anno['pearson_scores'] for anno in eval_det_annos]).mean()
                 result_str += 'Pearson Coef [-1, 1]: {:.3f}\n'.format(mean_pearson_scores)
                 result_dict.update({'pearson': mean_pearson_scores})
             elif eval_metric == 'normals':
-                mean_normals_scores = np.mean([anno['normals_scores'].mean() for anno in eval_det_annos])
+                mean_normals_scores = np.concatenate([anno['normals_scores'] for anno in eval_det_annos]).mean()
                 result_str += 'Normals [m]: {:.3f}\n'.format(mean_normals_scores)
                 result_dict.update({'normals': mean_normals_scores})
             elif eval_metric == 'jpe':
                 jpe_scores = np.concatenate([anno['jpe_scores'] for anno in eval_det_annos])
+                result_str += 'Joint Position Shape {}\n'.format(jpe_scores.shape)
+                jap_tp = (jpe_scores <= 0.1).sum(0)
+                jap_fp = (jpe_scores > 0.1).sum(0)
+                jap_scores = jap_tp / (jap_tp + jap_fp)
                 for j_id in range(18):
-                    j_jpe_scores = jpe_scores[:, j_id]
-                    result_str += 'Joint Position Error J{} mean [m]: {:.3f}\n'.format(j_id, j_jpe_scores.mean())
-                    result_str += 'Joint Position Error J{} std [m]: {:.3f}\n'.format(j_id, j_jpe_scores.std())
-                    result_str += 'Joint Average Precision J{} mean [%]: {:.3f}\n'.format(j_id, (j_jpe_scores <= 0.1).mean())
+                    j_jpe_scores = jpe_scores[:, j_id].mean()
+                    j_jap_scores = jap_scores[j_id]
+                    result_str += 'Joint Position Error J{} mean [m]: {:.3f}\n'.format(j_id, j_jpe_scores)
+                    result_str += 'Joint Average Precision J{} mean [%]: {:.3f}\n'.format(j_id, 100.0*j_jap_scores)
                  
-                mean_jpe_scores = jpe_scores.mean(-1)
-                result_str += 'Joint Position Error mean [m]: {:.3f}\n'.format(mean_jpe_scores.mean())
-                result_str += 'Joint Position Error std [m]: {:.3f}\n'.format(mean_jpe_scores.std())
-                result_dict.update({'jpe': mean_jpe_scores.mean()})
-                mean_jap_scores = np.concatenate([anno['jap_scores'] for anno in eval_det_annos]).mean()
-                result_str += 'Joint Average Precision [%]: {:.3f}\n'.format(mean_jap_scores)
-                result_dict.update({'jap': mean_jap_scores})
+                result_str += 'Joint Position Error mean [m]: {:.3f}\n'.format(jpe_scores.mean())
+                result_dict.update({'jpe': jpe_scores.mean()})
+                result_str += 'Joint Average Precision [%]: {:.3f}\n'.format(100.0*jap_scores.mean())
+                result_dict.update({'jap': jap_scores.mean()})
             else:
                 raise NotImplementedError
 
