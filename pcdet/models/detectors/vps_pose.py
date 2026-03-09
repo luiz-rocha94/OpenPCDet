@@ -37,6 +37,7 @@ class VPSPose(Detector3DTemplate):
         import torch
         from ..model_utils import model_nms_utils
         from ..model_utils import vps_pose_utils
+        from pcdet.ops.iou3d_nms.iou3d_nms_utils import boxes_iou3d_gpu
         """
         Args:
             batch_dict:
@@ -133,13 +134,17 @@ class VPSPose(Detector3DTemplate):
                 box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,
                 recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,
                 thresh_list=post_process_cfg.RECALL_THRESH_LIST
-            )        
+            )
             
             record_dict = {
                 'pred_boxes': final_boxes,
                 'pred_scores': final_scores,
-                'pred_labels': final_labels
+                'pred_labels': final_labels,
             }
+            
+            if 'gt_boxes' in batch_dict:
+                final_ious, _ = boxes_iou3d_gpu(batch_dict['gt_boxes'][index, :, :7], final_boxes).max(1)
+                record_dict.update({'pred_ious': final_ious})
             
             bs_mask = (batch_dict['point_coords'][:, 0] == index)
             point_dist_preds = torch.linalg.norm(batch_dict['point_normal_preds'][bs_mask].view(-1, 3), axis=-1) < post_process_cfg.DIST_THRESH

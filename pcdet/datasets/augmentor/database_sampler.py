@@ -48,6 +48,7 @@ class DataBaseSampler(object):
         self.sample_groups = {}
         self.sample_class_num = {}
         self.limit_whole_scene = sampler_cfg.get('LIMIT_WHOLE_SCENE', False)
+        self.sample_range = np.array(sampler_cfg.get('SAMPLE_RANGE', []), dtype=np.float32)
 
         for x in sampler_cfg.SAMPLE_GROUPS:
             class_name, sample_num = x.split(':')
@@ -393,8 +394,7 @@ class DataBaseSampler(object):
             else:
                 file_path = self.root_path / info['path']
 
-                obj_points = np.fromfile(str(file_path), dtype=np.float32).reshape(
-                    [-1, self.sampler_cfg.NUM_POINT_FEATURES])
+                obj_points = np.fromfile(str(file_path), dtype=np.float32).reshape(-1, self.sampler_cfg.NUM_POINT_FEATURES)
                 if obj_points.shape[0] != info['num_points_in_gt']:
                     obj_points = np.fromfile(str(file_path), dtype=np.float64).reshape(-1, self.sampler_cfg.NUM_POINT_FEATURES)
 
@@ -414,6 +414,7 @@ class DataBaseSampler(object):
 
         obj_points = np.concatenate(obj_points_list, axis=0)
         sampled_gt_names = np.array([x['name'] for x in total_valid_sampled_dict])
+
 
         if self.sampler_cfg.get('FILTER_OBJ_POINTS_BY_TIMESTAMP', False) or obj_points.shape[-1] != points.shape[-1]:
             if self.sampler_cfg.get('FILTER_OBJ_POINTS_BY_TIMESTAMP', False):
@@ -437,6 +438,12 @@ class DataBaseSampler(object):
         data_dict['gt_boxes'] = gt_boxes
         data_dict['gt_names'] = gt_names
         data_dict['points'] = points
+        
+        if len(data_dict.get('gt_poses', [])):
+            gt_poses = data_dict['gt_poses'][gt_boxes_mask]
+            sampled_gt_poses = np.array([x['pose'] for x in total_valid_sampled_dict])
+            gt_poses = np.concatenate([gt_poses, sampled_gt_poses], axis=0)
+            data_dict['gt_poses'] = gt_poses
 
         if self.img_aug_type is not None:
             data_dict = self.copy_paste_to_image(img_aug_gt_dict, data_dict, points)
@@ -464,12 +471,16 @@ class DataBaseSampler(object):
                 num_gt = np.sum(class_name == gt_names)
                 sample_group['sample_num'] = str(int(self.sample_class_num[class_name]) - num_gt)
             if int(sample_group['sample_num']) > 0:
-                sampled_dict = self.sample_with_fixed_number(class_name, sample_group)
-
-                sampled_boxes = np.stack([x['box3d_lidar'] for x in sampled_dict], axis=0).astype(np.float32)
-
                 assert not self.sampler_cfg.get('DATABASE_WITH_FAKELIDAR', False), 'Please use latest codes to generate GT_DATABASE'
-
+                
+                sampled_dict = self.sample_with_fixed_number(class_name, sample_group)
+                if len(self.sample_range) == 3:
+                    for sampled in sampled_dict:
+                        sampled_pos = np.random.uniform(-1, 1, 3).astype(np.float32) * self.sample_range
+                        sampled['box3d_lidar'][:3] += sampled_pos
+                        sampled['pose'][:, :3] += sampled_pos
+                
+                sampled_boxes = np.stack([x['box3d_lidar'] for x in sampled_dict], axis=0).astype(np.float32)
                 iou1 = iou3d_nms_utils.boxes_bev_iou_cpu(sampled_boxes[:, 0:7], existed_boxes[:, 0:7])
                 iou2 = iou3d_nms_utils.boxes_bev_iou_cpu(sampled_boxes[:, 0:7], sampled_boxes[:, 0:7])
                 iou2[range(sampled_boxes.shape[0]), range(sampled_boxes.shape[0])] = 0
