@@ -15,6 +15,7 @@ from .once.once_dataset import ONCEDataset
 #from .argo2.argo2_dataset import Argo2Dataset
 from .custom.custom_dataset import CustomDataset
 from .ubc3v.ubc3v_dataset import UBC3VDataset
+from .humanm3.humanm3_dataset import HumanM3Dataset
 
 __all__ = {
     'DatasetTemplate': DatasetTemplate,
@@ -27,6 +28,7 @@ __all__ = {
     'CustomDataset': CustomDataset,
     #'Argo2Dataset': Argo2Dataset,
     'UBC3VDataset': UBC3VDataset,
+    'HumanM3Dataset': HumanM3Dataset,
 }
 
 

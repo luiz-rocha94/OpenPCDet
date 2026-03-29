@@ -155,9 +155,20 @@ def draw_poses(vis, poses, color=[0, 1, 0]):
         poses = poses.cpu().numpy()
     
     for joints in poses:
-        lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
-                 ( 6,  8), ( 8,  9), ( 5,  7), ( 7, 10), (10, 11), (12, 13),
-                 (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
+        joints_shape = joints.shape
+        if joints_shape[0] == 18:
+            lines = [( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5), ( 5,  6), 
+                     ( 6,  8), ( 8,  9), ( 5,  7), ( 7, 10), (10, 11), (12, 13),
+                     (13, 14), (15, 16), (16, 17), ( 1, 12), (1, 15)]
+        elif joints_shape[0] == 15:
+            lines = [
+                (0,1),(1,3),(3,5),      # left leg
+                (0,2),(2,4),(4,6),      # right leg
+                (0,7),(7,8),            # spine
+                (7,9),(9,11),(11,13),   # left arm
+                (7,10),(10,12),(12,14)  # right arm
+            ]
+            
         line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(joints), 
                                         lines=o3d.utility.Vector2iVector(lines))
         line_set.paint_uniform_color(color)

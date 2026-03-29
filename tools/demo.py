@@ -62,11 +62,11 @@ class DemoDataset(DatasetTemplate):
 
 def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/ubc3v_models/vps_pose_colors.yaml',
+    parser.add_argument('--cfg_file', type=str, default='cfgs/humanm3_models/vps_pose_left.yaml',
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='D:/mestrado/OpenPCDet/output/ubc3v_models/vps_pose_colors/default/ckpt/latest_model.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='cfgs/humanm3_models/vps_pose_left_latest.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -106,6 +106,7 @@ def main():
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
+            """
             logger.info(('pearson_scores: {:.3f}; ' 
                          'normals_scores: {:.3f}; ' 
                          'jpe_scores: {} ' 
@@ -115,19 +116,20 @@ def main():
                                                       ', '.join(['{}:{:.3f}'.format(j, x) for j, x in enumerate(pred_dicts[0]['jpe_scores'].cpu().numpy()[0])]), 
                                                       pred_dicts[0]['jpe_scores'].cpu().numpy()[0].mean(),
                                                       pred_dicts[0]['jap_scores'].cpu().numpy()[0]))                                        
+            """
             V.draw_scenes(
                 #points=data_dict['points'][:, 1:],
-                #points=data_dict['voxel_features'][..., :3].view((-1, 3)), point_colors=data_dict['voxel_colors'][..., :3].view((-1, 3))
+                #points=data_dict['voxel_features'][..., :3].view((-1, 3)), #point_colors=data_dict['voxel_colors'][..., :3].view((-1, 3))
                 #points=data_dict['points'][:, 1:4], point_colors=data_dict['points'][:, 4:7],
                 points=data_dict['point_coords'][:, 1:],
-                point_colors=data_dict['point_part_labels'],
+                #point_colors=data_dict['point_part_labels'],
                 #point_colors=pred_dicts[0]['part_segmentation'],
-                normals=data_dict['point_normal_labels'].view(-1, 18, 3)[:, :],
+                #normals=data_dict['point_normal_labels'].view(-1, 18, 3)[:, :],
                 #normals=pred_dicts[0]['normals'],#.view(-1, 18, 3)[:, idx % 18], 
                 gt_poses=data_dict['gt_poses'][0],
-                #ref_poses=pred_dicts[0]['pose_estimation'],
+                ref_poses=pred_dicts[0]['pose_estimation'],
                 gt_boxes=data_dict['gt_boxes'][0],
-                #ref_boxes=pred_dicts[0]['pred_boxes'], 
+                ref_boxes=pred_dicts[0]['pred_boxes'], 
             )
 
             if not OPEN3D_FLAG:
