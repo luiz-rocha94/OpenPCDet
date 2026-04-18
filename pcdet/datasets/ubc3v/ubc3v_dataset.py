@@ -72,7 +72,7 @@ class UBC3VDataset(DatasetTemplate):
         offset = point_features[:, 2].min()
         point_features[:, 2] -= offset
         colors = apply_color_map(point_features[:, 3:6], cmap=self.dataset_cfg.get('COLOR_MAP', 'hsv'))
-        point_features = np.concatenate([point_features[:, :3], colors], axis=1)
+        point_features = np.concatenate([point_features[:, :3], colors[:, :4]], axis=1)
         
         if return_offset:
             return point_features, offset

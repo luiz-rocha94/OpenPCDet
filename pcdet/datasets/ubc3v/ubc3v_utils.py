@@ -40,7 +40,7 @@ def points_transform(points, rotation, translation):
     new_points = rot.apply(points).astype(np.float32)
     new_points += translation.reshape((1,-1))
     new_points = new_points/100
-    new_points[:, [1, 2]] = new_points[:, [2, 1]]
+    new_points = new_points[:, [2, 0, 1]]
     return new_points
 
 
@@ -60,7 +60,7 @@ def get_angle(joints):
     return angle
 
 
-def get_angle2(joints, right=True):
+def get_angle2(joints, right=False, plot=False):
     names = list(get_joints_name().keys())
     if len(joints.shape) == 2:
         joints = joints[None, :, :]
@@ -74,17 +74,18 @@ def get_angle2(joints, right=True):
     dist = np.cross(rhip, lhip) if right else np.cross(lhip, rhip)
     angle = np.arctan2(dist[:, 1], dist[:, 0]) # y / x
     angle = angle + (angle < 0)*2*np.pi # [0, 2pi]
-    origin = np.zeros((2,3))
-    dest = np.concatenate([rhip, lhip, dist])[:, :2].T
-    plt.quiver(*origin, *dest, color=['r','b','g'], scale=0.75)
-    plt.xlabel('x')
-    plt.ylabel('y')
-    plt.show()
+    if plot:
+        origin = np.zeros((2,3))
+        dest = np.concatenate([rhip, lhip, dist])[:, :2].T
+        plt.quiver(*origin, *dest, color=['r','b','g'], scale=0.75)
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.show()
     return angle
 
 
 def get_bouding_box(points, joints):
-    angle = get_angle2(joints, True)
+    angle = get_angle2(joints)
     max_, min_ = points.max(0), points.min(0)
     lwh = max_ - min_
     center = min_ + lwh/2
@@ -120,8 +121,8 @@ def get_annos(sequence_path, cams=[], name='*.png'):
     names = get_joints_name()
     posture = np.array([np.stack([joints[key].flat[0].squeeze().astype(np.float32)[12:15] 
                         for key in names.values()]) for joints in posture])
-    posture[:, :, [1, 2]] = posture[:, :, [2, 1]]
     posture = posture/100 # cm to m
+    posture = posture[..., [2, 0, 1]]
     
     """
     # Fix joint side   
@@ -238,6 +239,7 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
                         [127,  63,  63],
                         [127, 116,  63]], np.uint8)
     
+    #"""
     colors_dict = OrderedDict()
     colors_dict['head'] = [38, 39, 40, 41, 42]
     colors_dict['neck'] = [43, 44, 10, 16, 17, 8, 9, 15]
@@ -253,12 +255,52 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
     colors_dict['left_shoulder'] = [12, 13]
     colors_dict['left_arm'] = [30, 31, 32]
     colors_dict['left_hand'] = [33, 28]
+    joint_dict = {'head':0, 'neck':1, 
+                  'torso':3, 
+                  'hip':5, 
+                  'right_leg':10, 'right_foot':11, 
+                  'left_leg':8, 'left_foot':9,
+                  'right_shoulder':15, 'right_arm':16, 'right_hand':17, 
+                  'left_shoulder':12, 'left_arm':13, 'left_hand':14}
+    #"""
+    
+    """
+    colors_dict = OrderedDict()
+    colors_dict['left_hip'] = [2, 5]
+    colors_dict['right_hip'] = [3, 7]
+    colors_dict['left_leg'] = [18]
+    colors_dict['right_leg'] = [19]
+    colors_dict['left_foot'] = [20, 22, 24, 26]
+    colors_dict['right_foot'] = [21, 23, 25, 27]
+    colors_dict['torso'] = [0, 1, 4, 6, 8, 9, 10, 15]
+    colors_dict['head'] = [16, 17, 38, 39, 40, 41, 42, 43, 44]
+    colors_dict['left_shoulder'] = [12, 13]
+    colors_dict['right_shoulder'] = [11, 14]
+    colors_dict['left_arm'] = [30, 31]
+    colors_dict['right_arm'] = [34, 35]
+    colors_dict['left_hand'] = [32, 33, 28]    
+    colors_dict['right_hand'] = [36, 37, 29]
+    joint_dict = {'left_hip':1, 'right_hip':2,
+                'left_leg':3, 'right_leg':4,
+                'left_foot':5, 'right_foot':6,
+                'torso':7, 'head':8, 
+                'left_shoulder':9, 'right_shoulder':10,
+                'left_arm':11, 'right_arm':12,
+                'left_hand':13, 'right_hand':14}
+    #"""
+    
     colors_list = []
     [colors_list.extend(list(x)) for x in colors_dict.values()]
     src_map = src_map[colors_list]
     src_map = (src_map / 255).astype(np.float32)
     lens = [len(x) for x in colors_dict.values()]
     space_range = np.linspace(0, 1, len(colors_dict)+1, endpoint=True)
+    #color_space = np.zeros(len(src_map), dtype=np.float32)
+    #for i, (part_key, idx_list) in enumerate(colors_dict.items()):
+    #    new_color = space_range[i]
+    #    for idx in idx_list:
+    #        color_space[idx] = new_color
+    
     color_space = np.zeros(0, dtype=np.float32)
     for i, len_i in enumerate(lens):
         color_space = np.concatenate([color_space, 
@@ -266,6 +308,7 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
     
     part_dict = {key:value 
                  for key, value in zip(colors_dict, np.cumsum([0]+lens)[:-1])}
+    [[part_dict.update({v:k}) for v in list_v] for k,list_v in colors_dict.items()]
     cmap = cm.ScalarMappable(cmap=cmap, norm=Normalize(vmin=0, vmax=1))
     dst_map = cmap.to_rgba(color_space)[:, :3].astype(np.float32)
     src_cmap = plt.cm.colors.ListedColormap(src_map)
@@ -302,24 +345,34 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
             plt.title('VPSPose %s color map' % key)
             plt.show()
         print(dst_map[np.cumsum([0]+lens)[:-1]])
-    return src_map, dst_map, color_space, part_dict
+    return src_map, dst_map, color_space, part_dict, joint_dict
 
 
-def apply_color_map(colors, **kwargs):
+def apply_color_map(colors, **kwargs):    
     use_src = kwargs['cmap'] == 'src'
-    src_map, dst_map, color_space, part_dict = get_color_maps(**kwargs)
+    src_map, dst_map, color_space, part_dict, joint_dict = get_color_maps(**kwargs)
     distances = pairwise_distances(colors, src_map)
-    idx = np.argmin(distances, 1)
+    src_idx = np.argmin(distances, 1)
+    min_dist = distances[np.arange(0,len(src_idx)), src_idx]
+    dist_mask = min_dist <= 3**0.5/255
     color_map = src_map if use_src else dst_map
-    colors = np.concatenate([color_map[idx], 1+idx[:, None]], axis=1).astype(np.float32)
+    new_colors = color_map[src_idx] * 1.0*dist_mask[:, None]
+    src_idx[dist_mask] = -1
+    names = np.zeros(len(new_colors), dtype=np.float32)
+    for part_key, joint_index in joint_dict.items():
+        part_idx = part_dict[part_key]
+        part_mask = ~(new_colors[:, :3] != color_map[part_idx]).any(1)
+        names[part_mask] = joint_index
+        
+    new_colors = np.concatenate([new_colors, 1+src_idx[:, None], names[:, None]], axis=1).astype(np.float32)
     if kwargs.get('part'):
         part_idx = part_dict[kwargs['part']]
-        colors[(colors != color_map[part_idx]).any(1), :] = 0
-    return colors
+        new_colors[(new_colors[:, :3] != color_map[part_idx]).any(1), :] = 0
+    return new_colors
 
 
 def get_normals(points, colors, joints, threshold=0.20):
-    src_map, dst_map, color_space, part_dict = get_color_maps()
+    src_map, dst_map, color_space, part_dict, joint_dict = get_color_maps()
     distances = pairwise_distances(colors, dst_map)
     idx = np.argmin(distances, 1)
     labels = color_space[idx]
@@ -360,6 +413,7 @@ def get_joints_name():
                 10:'RKnee', 11:'RFoot', 
                 12:'LShoulder', 13:'LElbow', 14:'LHand', 
                 15:'RShoulder', 16:'RElbow', 17:'RHand'}
+    
     for old_key, new_key in zip(old_keys, new_keys.values()):
         names[new_key] = old_key
     return names
@@ -437,7 +491,7 @@ def draw_point_cloud(points, colors, normals, joints, box3d):
     #geometries.append(line_set)    
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
-    #geometries.append(coords)
+    geometries.append(coords)
     o3d.visualization.draw_geometries(geometries, width=1080, height=1080, 
                                       lookat=center, up=[0,0,1], front=[0,-1,0], zoom=0.6)
 
@@ -484,21 +538,30 @@ if __name__ == '__main__':
     parser.add_argument('--subset_path', type=str, default='easy-pose')
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
-    parser.add_argument('--cam', type=str, default=None)
-    parser.add_argument('--frame', type=str, default='mayaProject.000003.png')
+    parser.add_argument('--cam', type=list, default=[])
+    parser.add_argument('--frame', type=str, default='mayaProject.000946.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path
     save_path = Path(args.base_path) / 'pose'
     sequence_path = Path(args.base_path) / args.subset_path / args.split_path / args.sequence_path
     mapper = get_mapper(Path(args.base_path) / args.subset_path)
-    anno = get_annos(sequence_path, name=args.frame)[0]
+    anno = get_annos(sequence_path, name=args.frame, cams=args.cam)[0]
     points = get_points(anno, mapper)
     points, colors = points[:, :3], points[:, 3:6]
     joints = anno['Posture']
     box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    colors = apply_color_map(colors, plot=True, cmap='hsv')
+    colors = apply_color_map(colors, plot=True, cmap='src')
     normals, _ = get_normals(points, colors[:, :3], joints)
+    #joint_index = get_joint_index(colors)
+    #mask = colors[:, 4] == 14
+    #draw_point_cloud(points[mask], colors[mask, :3], normals[mask], joints, box3d)
     draw_point_cloud(points, colors[:, :3], normals, joints, box3d)
     #map_files(subset_path, save_path, num_workers=4)
+
+    #model_points = np.concatenate([points, colors[:, 4, None]], axis=-1)
+    #model_points = model_points[model_points[:,3] != 0]
+    #model_joints = joints[[5, 7, 6, 10, 8, 11, 9, 1, 0, 15, 12, 16, 13, 17, 14]]
+    #np.save('model_points.npy', model_points)
+    #np.save('model_joints.npy', model_joints)
