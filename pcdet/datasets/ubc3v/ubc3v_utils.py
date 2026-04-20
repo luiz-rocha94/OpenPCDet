@@ -89,7 +89,7 @@ def get_bouding_box(points, joints):
     max_, min_ = points.max(0), points.min(0)
     lwh = max_ - min_
     center = min_ + lwh/2
-    box3d = np.concatenate([center, lwh[[1,0,2]], angle], 
+    box3d = np.concatenate([center, lwh, angle], 
                            axis=0).astype(np.float32)
     return box3d
     
@@ -245,41 +245,41 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
     colors_dict['neck'] = [43, 44, 10, 16, 17, 8, 9, 15]
     colors_dict['torso'] = [0, 1, 4, 6]
     colors_dict['hip'] = [3, 7, 2, 5]
-    colors_dict['right_leg'] = [19, 21, 23]
-    colors_dict['right_foot'] = [25, 27]
-    colors_dict['left_leg'] = [18, 20, 22]
-    colors_dict['left_foot'] = [24, 26]
-    colors_dict['right_shoulder'] = [11, 14]
-    colors_dict['right_arm'] = [34, 35, 36]
-    colors_dict['right_hand'] = [37, 29]
-    colors_dict['left_shoulder'] = [12, 13]
-    colors_dict['left_arm'] = [30, 31, 32]
-    colors_dict['left_hand'] = [33, 28]
+    colors_dict['left_leg'] = [19, 21, 23]
+    colors_dict['left_foot'] = [25, 27]
+    colors_dict['right_leg'] = [18, 20, 22]
+    colors_dict['right_foot'] = [24, 26]
+    colors_dict['left_shoulder'] = [11, 14]
+    colors_dict['left_arm'] = [34, 35, 36]
+    colors_dict['left_hand'] = [37, 29]
+    colors_dict['right_shoulder'] = [12, 13]
+    colors_dict['right_arm'] = [30, 31, 32]
+    colors_dict['right_hand'] = [33, 28]
     joint_dict = {'head':0, 'neck':1, 
                   'torso':3, 
                   'hip':5, 
-                  'right_leg':10, 'right_foot':11, 
                   'left_leg':8, 'left_foot':9,
-                  'right_shoulder':15, 'right_arm':16, 'right_hand':17, 
-                  'left_shoulder':12, 'left_arm':13, 'left_hand':14}
+                  'right_leg':10, 'right_foot':11,
+                  'left_shoulder':12, 'left_arm':13, 'left_hand':14,
+                  'right_shoulder':15, 'right_arm':16, 'right_hand':17}
     #"""
     
     """
     colors_dict = OrderedDict()
-    colors_dict['left_hip'] = [2, 5]
-    colors_dict['right_hip'] = [3, 7]
-    colors_dict['left_leg'] = [18]
-    colors_dict['right_leg'] = [19]
-    colors_dict['left_foot'] = [20, 22, 24, 26]
-    colors_dict['right_foot'] = [21, 23, 25, 27]
-    colors_dict['torso'] = [0, 1, 4, 6, 8, 9, 10, 15]
-    colors_dict['head'] = [16, 17, 38, 39, 40, 41, 42, 43, 44]
-    colors_dict['left_shoulder'] = [12, 13]
-    colors_dict['right_shoulder'] = [11, 14]
-    colors_dict['left_arm'] = [30, 31]
-    colors_dict['right_arm'] = [34, 35]
-    colors_dict['left_hand'] = [32, 33, 28]    
-    colors_dict['right_hand'] = [36, 37, 29]
+    colors_dict['right_hip'] = [2, 5]
+    colors_dict['left_hip'] = [3, 7]
+    colors_dict['right_leg'] = [18]
+    colors_dict['left_leg'] = [19]
+    colors_dict['right_foot'] = [20, 22, 24, 26]
+    colors_dict['left_foot'] = [21, 23, 25, 27]
+    colors_dict['torso'] = [0, 1, 4, 6, 8, 9, 10, 15, 16, 17, 43, 44]
+    colors_dict['head'] = [38, 39, 40, 41, 42]
+    colors_dict['right_shoulder'] = [12, 13]
+    colors_dict['left_shoulder'] = [11, 14]
+    colors_dict['right_arm'] = [30, 31]
+    colors_dict['left_arm'] = [34, 35]
+    colors_dict['right_hand'] = [32, 33, 28]    
+    colors_dict['left_hand'] = [36, 37, 29]
     joint_dict = {'left_hip':1, 'right_hip':2,
                 'left_leg':3, 'right_leg':4,
                 'left_foot':5, 'right_foot':6,
@@ -348,7 +348,7 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
     return src_map, dst_map, color_space, part_dict, joint_dict
 
 
-def apply_color_map(colors, **kwargs):    
+def apply_color_map(colors, return_joint_idx=False, **kwargs):    
     use_src = kwargs['cmap'] == 'src'
     src_map, dst_map, color_space, part_dict, joint_dict = get_color_maps(**kwargs)
     distances = pairwise_distances(colors, src_map)
@@ -357,14 +357,17 @@ def apply_color_map(colors, **kwargs):
     dist_mask = min_dist <= 3**0.5/255
     color_map = src_map if use_src else dst_map
     new_colors = color_map[src_idx] * 1.0*dist_mask[:, None]
-    src_idx[dist_mask] = -1
-    names = np.zeros(len(new_colors), dtype=np.float32)
-    for part_key, joint_index in joint_dict.items():
-        part_idx = part_dict[part_key]
-        part_mask = ~(new_colors[:, :3] != color_map[part_idx]).any(1)
-        names[part_mask] = joint_index
-        
-    new_colors = np.concatenate([new_colors, 1+src_idx[:, None], names[:, None]], axis=1).astype(np.float32)
+    src_idx[~dist_mask] = -1
+    new_colors = np.concatenate([new_colors, 1+src_idx[:, None]], axis=1).astype(np.float32)
+    if return_joint_idx:
+        names = np.zeros(len(new_colors), dtype=np.float32)
+        for part_key, joint_index in joint_dict.items():
+            part_idx = part_dict[part_key]
+            part_mask = ~(new_colors[:, :3] != color_map[part_idx]).any(1)
+            names[part_mask] = joint_index
+          
+        new_colors = np.concatenate([new_colors, names[:, None]], axis=1).astype(np.float32)
+    
     if kwargs.get('part'):
         part_idx = part_dict[kwargs['part']]
         new_colors[(new_colors[:, :3] != color_map[part_idx]).any(1), :] = 0
@@ -505,10 +508,11 @@ def map_files(subset_path, save_path, num_workers=4):
     
     def process_single_scene(sequence_path):
         split = sequence_path.parts[-2]
-        print('%s sequence: %s' % (split, sequence_path.name))
         annos = get_annos(sequence_path)
         sample_id_list = []
-        for anno in annos:
+        for i, anno in enumerate(annos):
+            print('split: {}; sequence: {}; step {}/{}'.format(split, sequence_path.name,
+                                                               i+1, len(annos)))
             points = get_points(anno, mapper)
             sample_idx = anno['Index']
             points_file = save_path / split / '{}.npy'.format(sample_idx)
@@ -552,7 +556,7 @@ if __name__ == '__main__':
     joints = anno['Posture']
     box3d = get_bouding_box(points, joints)
     #plot_point_cloud(points[:, :3], points[:, 3:], joints)
-    colors = apply_color_map(colors, plot=True, cmap='src')
+    colors = apply_color_map(colors, return_joint_idx=True, plot=True, cmap='hsv')
     normals, _ = get_normals(points, colors[:, :3], joints)
     #joint_index = get_joint_index(colors)
     #mask = colors[:, 4] == 14

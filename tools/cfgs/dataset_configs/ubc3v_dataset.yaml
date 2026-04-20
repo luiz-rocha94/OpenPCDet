@@ -1,5 +1,5 @@
 DATASET: 'UBC3VDataset'
-DATA_PATH: 'C:/Users/rocha/Documentos/data/pose'
+DATA_PATH: 'E:/data/pose'
 DATA_SRC: 'easy-pose'
 
 POINT_CLOUD_RANGE: [-8, -8, 0, 8, 8, 4]
@@ -14,8 +14,8 @@ DATA_SPLIT: {
 }
 
 INFO_PATH: {
-    'train': [ubc3v_infos_train.pkl],
-    'test': [ubc3v_infos_valid.pkl],
+    'train': [ubc3v_infos_left_train.pkl],
+    'test': [ubc3v_infos_left_valid.pkl],
 }
 
 GET_ITEM_LIST: ["points"]
@@ -31,9 +31,6 @@ POINT_FEATURE_ENCODING: {
 DATA_AUGMENTOR:
     DISABLE_AUG_LIST: ['placeholder']
     AUG_CONFIG_LIST:
-        - NAME: random_world_flip
-          ALONG_AXIS_LIST: ['x', 'y']
-
         - NAME: random_world_rotation
           WORLD_ROT_ANGLE: [-3.1415927, 3.1415927]
 

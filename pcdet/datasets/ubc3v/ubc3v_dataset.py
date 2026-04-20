@@ -73,6 +73,7 @@ class UBC3VDataset(DatasetTemplate):
         point_features[:, 2] -= offset
         colors = apply_color_map(point_features[:, 3:6], cmap=self.dataset_cfg.get('COLOR_MAP', 'hsv'))
         point_features = np.concatenate([point_features[:, :3], colors[:, :4]], axis=1)
+        point_features = point_features[point_features[:, -1] != 0]
         
         if return_offset:
             return point_features, offset
@@ -283,7 +284,7 @@ class UBC3VDataset(DatasetTemplate):
                 plt.ylim(0, 200)
                 plt.legend()
                 plt.savefig("dist.png")
-                plt.show()
+                #plt.show()
             else:
                 raise NotImplementedError
 
@@ -293,10 +294,11 @@ class UBC3VDataset(DatasetTemplate):
         import concurrent.futures as futures
 
         def process_single_scene(sequence_path):
-            print('%s sequence: %s' % (self.split, sequence_path.name))
             annos = get_annos(sequence_path)
             infos = []
-            for anno in annos:
+            for i, anno in enumerate(annos):
+                print('split: {}; sequence: {}; step {}/{}'.format(self.split, sequence_path.name,
+                                                                   i+1, len(annos)))
                 info = {}
                 sample_idx = anno['Index']
                 pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
@@ -405,8 +407,8 @@ def create_ubc3v_infos(dataset_cfg, class_names, data_path, save_path, workers=4
     train_split, val_split = 'train', 'valid'
     num_features = len(dataset_cfg.POINT_FEATURE_ENCODING.src_feature_list)
 
-    train_filename = save_path / ('ubc3v_infos_%s.pkl' % train_split)
-    val_filename = save_path / ('ubc3v_infos_%s.pkl' % val_split)
+    train_filename = save_path / ('ubc3v_infos_left_%s.pkl' % train_split)
+    val_filename = save_path / ('ubc3v_infos_left_%s.pkl' % val_split)
 
     print('------------------------Start to generate data infos------------------------')
 
@@ -437,20 +439,19 @@ if __name__ == '__main__':
     import yaml
     from pathlib import Path
     from easydict import EasyDict
+    ROOT_DIR = Path(__file__).resolve().parents[3]
+    dataset_cfg = EasyDict(yaml.safe_load(open(ROOT_DIR / 'tools/cfgs/dataset_configs/ubc3v_dataset.yaml')))
+    data_path = Path(dataset_cfg['DATA_PATH'])
     if sys.argv.__len__() > 1 and sys.argv[1] == 'create_ubc3v_infos':
-        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
         create_ubc3v_infos(
         dataset_cfg=dataset_cfg,
         class_names=['Pedestrian'],
-        data_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
-        save_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
+        data_path=data_path,
+        save_path=data_path,
         )
     else:
-        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        dataset_cfg = EasyDict(yaml.safe_load(open(ROOT_DIR / 'tools/cfgs/dataset_configs/ubc3v_dataset.yaml')))
         dataset = UBC3VDataset(
             dataset_cfg=dataset_cfg, class_names=['Pedestrian'], 
-            root_path=ROOT_DIR / 'data' / 'ubc3v' / 'pose',
+            root_path=data_path,
             training=False, logger=common_utils.create_logger()
         )
