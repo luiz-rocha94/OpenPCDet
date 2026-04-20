@@ -1,4 +1,8 @@
+import torch
 from .detector3d_template import Detector3DTemplate
+from ..model_utils import model_nms_utils
+from ..model_utils import vps_pose_utils
+from pcdet.ops.iou3d_nms.iou3d_nms_utils import boxes_iou3d_gpu
 
 
 class VPSPose(Detector3DTemplate):
@@ -33,11 +37,11 @@ class VPSPose(Detector3DTemplate):
         loss = loss_rpn + loss_point 
         return loss, tb_dict, disp_dict
     
+    def instance_indices(self, points, input_boxes):
+        point_indices = vps_pose_utils.instance_in_boxes(points, input_boxes)
+        return point_indices
+    
     def post_processing(self, batch_dict):
-        import torch
-        from ..model_utils import model_nms_utils
-        from ..model_utils import vps_pose_utils
-        from pcdet.ops.iou3d_nms.iou3d_nms_utils import boxes_iou3d_gpu
         """
         Args:
             batch_dict:
@@ -143,7 +147,11 @@ class VPSPose(Detector3DTemplate):
             }
             
             if 'gt_boxes' in batch_dict:
-                final_ious, _ = boxes_iou3d_gpu(batch_dict['gt_boxes'][index, :, :7], final_boxes).max(1)
+                batch_gt_box = batch_dict['gt_boxes'][index]
+                if len(final_boxes):
+                    final_ious, _ = boxes_iou3d_gpu(batch_gt_box[:, :7], final_boxes).max(1)
+                else:
+                    final_ious = torch.zeros(len(batch_gt_box), dtype=batch_gt_box.dtype, device=batch_gt_box.device)
                 record_dict.update({'pred_ious': final_ious})
             
             bs_mask = (batch_dict['point_coords'][:, 0] == index)

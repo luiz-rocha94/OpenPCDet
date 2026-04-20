@@ -46,6 +46,12 @@ def box_scores(func):
     return wrapper
 
 
+def instance_in_boxes(points, input_boxes):
+    point_indices = roiaware_pool3d_utils.points_in_boxes_gpu(points[..., 0:3].view(1,-1,3), 
+                                                              input_boxes.view(1,-1,7))
+    return point_indices
+
+
 @box_scores
 def pearson_in_boxes(points, input_boxes, point_indices):
     batch_size, num_objects, _ = input_boxes.shape

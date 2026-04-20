@@ -2,7 +2,7 @@ DATASET: 'UBC3VDataset'
 DATA_PATH: 'E:/data/pose'
 DATA_SRC: 'easy-pose'
 
-POINT_CLOUD_RANGE: [-8, -8, 0, 8, 8, 4]
+POINT_CLOUD_RANGE: [-4, -4, 0, 4, 4, 4]
 
 MAP_CLASS_TO_KITTI: {
     'Pedestrian': 'Pedestrian',
@@ -63,7 +63,7 @@ DATA_PROCESSOR:
       }
 
     - NAME: transform_points_to_voxels
-      VOXEL_SIZE: [0.05, 0.05, 0.1]
+      VOXEL_SIZE: [0.1, 0.1, 0.1]
       MAX_POINTS_PER_VOXEL: 5
       MAX_NUMBER_OF_VOXELS: {
         'train': 16000,
