@@ -133,7 +133,15 @@ class VPSPose(Detector3DTemplate):
                 final_scores = selected_scores
                 final_labels = label_preds[selected]
                 final_boxes = box_preds[selected]
-                    
+                
+                batch_points = batch_dict['point_coords'][batch_dict['point_coords'][:,0] == index, 1:]
+                batch_box_points = vps_pose_utils.points_in_boxes(batch_points, final_boxes)
+                valid_boxes = batch_box_points > 0
+                final_scores = final_scores[valid_boxes]
+                final_labels = final_labels[valid_boxes]
+                final_boxes = final_boxes[valid_boxes]
+                
+                
             recall_dict = self.generate_recall_record(
                 box_preds=final_boxes if 'rois' not in batch_dict else src_box_preds,
                 recall_dict=recall_dict, batch_index=index, data_dict=batch_dict,

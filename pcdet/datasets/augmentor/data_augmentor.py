@@ -63,19 +63,47 @@ class DataAugmentor(object):
                 gt_boxes, points, return_flip=True
             )
             data_dict['flip_%s'%cur_axis] = enable
-            if 'roi_boxes' in data_dict.keys():
-                num_frame, num_rois,dim = data_dict['roi_boxes'].shape
-                roi_boxes, _, _ = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
-                data_dict['roi_boxes'].reshape(-1,dim), np.zeros([1,3]), return_flip=True, enable=enable
-                )
-                data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
-                data_dict['flip_%s'%cur_axis] = enable
-            if 'gt_poses' in data_dict.keys():
-                gt_poses = data_dict['gt_poses'].reshape(-1, 3)
-                _, gt_poses, _ = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
-                np.zeros(gt_boxes.shape), gt_poses, return_flip=True, enable=enable
-                )
-                data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
+            if enable:
+                if 'roi_boxes' in data_dict.keys():
+                    num_frame, num_rois,dim = data_dict['roi_boxes'].shape
+                    roi_boxes, _, _ = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                    data_dict['roi_boxes'].reshape(-1,dim), np.zeros([1,3]), return_flip=True, enable=enable
+                    )
+                    data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
+                    data_dict['flip_%s'%cur_axis] = enable
+                if 'gt_poses' in data_dict.keys():
+                    inv_pose = np.array([0,1,2,3,4,5,7,6,10,11,8,9,15,16,17,12,13,14], dtype=np.int32)
+                    poses_shape = data_dict['gt_poses'].shape
+                    gt_poses = data_dict['gt_poses'].reshape(-1, 3)
+                    _, gt_poses, _ = getattr(augmentor_utils, 'random_flip_along_%s' % cur_axis)(
+                    np.zeros(gt_boxes.shape), gt_poses.reshape(-1, 3), return_flip=True, enable=enable
+                    )
+                    gt_poses = gt_poses.reshape(poses_shape)
+                    gt_poses = gt_poses[:, inv_pose]
+                    data_dict['gt_poses'] = gt_poses
+                if 'cmap' in data_dict.keys():
+                    inv_idx = np.array([0,
+                                        0,1,2,3,4,
+                                        5,6,7,8,9,10,11,12,
+                                        13,14,15,16,
+                                        17,18,19,20,
+                                        26,27,28,
+                                        29,30,
+                                        21,22,23,
+                                        24,25,
+                                        38,39,
+                                        40,41,42,
+                                        43,44,
+                                        31,32,
+                                        33,34,35,
+                                        36,37
+                                        ], dtype=np.int32)
+                    inv_cmap = data_dict['cmap'][inv_idx]
+                    inv_cmap[0] = 0
+                    gt_poses = gt_poses[:, inv_pose]
+                    src_idx = points[:, -1].astype(np.int32)
+                    points[:, 3:6] = inv_cmap[src_idx]
+                    points[:, -1] = inv_idx[src_idx] 
 
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
@@ -96,10 +124,11 @@ class DataAugmentor(object):
             data_dict['roi_boxes'].reshape(-1, dim), np.zeros([1, 3]), rot_range=rot_range, return_rot=True, noise_rotation=noise_rot)
             data_dict['roi_boxes'] = roi_boxes.reshape(num_frame, num_rois,dim)
         if 'gt_poses' in data_dict.keys():
+            poses_shape = data_dict['gt_poses'].shape
             gt_poses = data_dict['gt_poses'].reshape(-1, 3)
             _, gt_poses, _ = augmentor_utils.global_rotation(
                 np.zeros(gt_boxes.shape), gt_poses, rot_range=rot_range, return_rot=True, noise_rotation=noise_rot)
-            data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
+            data_dict['gt_poses'] = gt_poses.reshape(poses_shape)
 
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
@@ -120,11 +149,12 @@ class DataAugmentor(object):
                 data_dict['gt_boxes'], data_dict['points'], config['WORLD_SCALE_RANGE'], return_scale=True
             )
         if 'gt_poses' in data_dict.keys():
+            poses_shape = data_dict['gt_poses'].shape
             gt_poses = data_dict['gt_poses'].reshape(-1, 3)
             _, gt_poses, _ = augmentor_utils.global_scaling(
                 np.zeros(gt_boxes.shape), gt_poses, config['WORLD_SCALE_RANGE'], return_scale=True, noise_scale=noise_scale
             )
-            data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
+            data_dict['gt_poses'] = gt_poses.reshape(poses_shape)
 
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points
@@ -168,9 +198,10 @@ class DataAugmentor(object):
         if 'roi_boxes' in data_dict.keys():
             data_dict['roi_boxes'][:, :3] += noise_translate
         if 'gt_poses' in data_dict.keys():
+            poses_shape = data_dict['gt_poses'].shape
             gt_poses = data_dict['gt_poses'].reshape(-1, 3)
             gt_poses[:, :3] += noise_translate
-            data_dict['gt_poses'] = gt_poses.reshape(-1, 18, 3)
+            data_dict['gt_poses'] = gt_poses.reshape(poses_shape)
         
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points

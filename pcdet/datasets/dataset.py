@@ -214,6 +214,7 @@ class DatasetTemplate(torch_data.Dataset):
             return self.__getitem__(new_index)
 
         data_dict.pop('gt_names', None)
+        data_dict.pop('cmap', None)
 
         return data_dict
 

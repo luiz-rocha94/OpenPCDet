@@ -255,13 +255,8 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
     colors_dict['right_shoulder'] = [12, 13]
     colors_dict['right_arm'] = [30, 31, 32]
     colors_dict['right_hand'] = [33, 28]
-    joint_dict = {'head':0, 'neck':1, 
-                  'torso':3, 
-                  'hip':5, 
-                  'left_leg':8, 'left_foot':9,
-                  'right_leg':10, 'right_foot':11,
-                  'left_shoulder':12, 'left_arm':13, 'left_hand':14,
-                  'right_shoulder':15, 'right_arm':16, 'right_hand':17}
+    joint_dict = {0:0, 1:5, 2:13, 3:13, 4:13, 5:17, 6:17, 7:17, 8:21, 9:24, 10:26, 
+                  11:29, 12:31, 13:33, 14:36, 15:38, 16:40, 17:43}
     #"""
     
     """
@@ -361,8 +356,7 @@ def apply_color_map(colors, return_joint_idx=False, **kwargs):
     new_colors = np.concatenate([new_colors, 1+src_idx[:, None]], axis=1).astype(np.float32)
     if return_joint_idx:
         names = np.zeros(len(new_colors), dtype=np.float32)
-        for part_key, joint_index in joint_dict.items():
-            part_idx = part_dict[part_key]
+        for joint_index, part_idx in joint_dict.items():
             part_mask = ~(new_colors[:, :3] != color_map[part_idx]).any(1)
             names[part_mask] = joint_index
           

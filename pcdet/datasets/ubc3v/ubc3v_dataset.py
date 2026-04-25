@@ -7,12 +7,12 @@ try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
-    from .ubc3v_utils import get_annos, get_bouding_box, get_joints_name, draw_point_cloud, apply_color_map, get_normals
+    from .ubc3v_utils import get_annos, get_bouding_box, get_joints_name, draw_point_cloud, apply_color_map, get_normals, get_color_maps
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from ubc3v_utils import get_annos, get_bouding_box, get_joints_name, draw_point_cloud, apply_color_map, get_normals
+    from ubc3v_utils import get_annos, get_bouding_box, get_joints_name, draw_point_cloud, apply_color_map, get_normals, get_color_maps
 
 
 class UBC3VDataset(DatasetTemplate):    
@@ -117,10 +117,16 @@ class UBC3VDataset(DatasetTemplate):
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
             gt_poses = annos['pose']
+            
+            cmap = self.dataset_cfg.get('COLOR_MAP', 'hsv')
+            src_map, dst_map, color_space, part_dict, joint_dict = get_color_maps(cmap=cmap)
+            color_map = src_map if cmap == 'src' else dst_map
+            
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar,
-                'gt_poses': gt_poses
+                'gt_poses': gt_poses,
+                'cmap': color_map,
             })
 
         data_dict = self.prepare_data(data_dict=input_dict)

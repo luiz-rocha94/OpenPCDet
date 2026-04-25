@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import common_utils
+from ...datasets.ubc3v.ubc3v_utils import get_color_maps
 
 
 def pearson(x, y):
@@ -50,6 +51,16 @@ def instance_in_boxes(points, input_boxes):
     point_indices = roiaware_pool3d_utils.points_in_boxes_gpu(points[..., 0:3].view(1,-1,3), 
                                                               input_boxes.view(1,-1,7))
     return point_indices
+
+
+@box_scores
+def points_in_boxes(points, input_boxes, point_indices):
+    batch_size, num_objects, _ = input_boxes.shape
+    output_box = torch.zeros((batch_size, num_objects), dtype=torch.int32, device=input_boxes.device)
+    for batch_index in range(batch_size):
+        for i in range(num_objects):
+            output_box[batch_index, i] = (point_indices[batch_index] == i).sum()
+    return output_box
 
 
 @box_scores
@@ -129,25 +140,9 @@ def spherical_to_cartesian(rtp):
     
 
 def color_joint_index(rgb):
-    src_map = torch.Tensor([[1.        , 0.41691217, 0.        ], # Head
-                            [1.        , 0.83382434, 0.        ], # Neck
-                            [0.74926347, 1.        , 0.        ], # Spine2
-                            [0.74926347, 1.        , 0.        ], # Spine1
-                            [0.74926347, 1.        , 0.        ], # Spine
-                            [0.3091895 , 1.        , 0.        ], # Hip
-                            [0.3091895 , 1.        , 0.        ], # RHip
-                            [0.3091895 , 1.        , 0.        ], # LHip
-                            [0.        , 1.        , 0.10772241], # RKnee
-                            [0.        , 1.        , 0.524632  ], # RFoot
-                            [0.        , 1.        , 0.96470314], # LKnee
-                            [0.        , 0.6183849 , 1.        ], # LFoot
-                            [0.        , 0.2014727 , 1.        ], # RShoulder
-                            [0.21543948, 0.        , 1.        ], # RElbow
-                            [0.65551347, 0.        , 1.        ], # RHand
-                            [1.        , 0.        , 0.92757434], # LShoulder
-                            [1.        , 0.        , 0.5106622 ], # LElbow
-                            [1.        , 0.        , 0.09375   ], # LHand
-                            ]).to(rgb.device)
+    _, src_map, _, part_dict, joint_dict = get_color_maps()
+    src_map = src_map[list(joint_dict.values())]
+    src_map = torch.from_numpy(src_map).to(rgb.device)
     _, joint_index = torch.linalg.norm(rgb.view(-1, 1, 3) - src_map.view(1, -1, 3), axis=-1).min(1)
     joint_index = joint_index.view(-1, 18)
     mask = torch.zeros(joint_index.shape, dtype=torch.bool)
