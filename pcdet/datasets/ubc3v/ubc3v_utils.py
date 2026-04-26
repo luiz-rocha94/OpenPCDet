@@ -85,10 +85,16 @@ def get_angle2(joints, right=False, plot=False):
 
 
 def get_bouding_box(points, joints):
+    names = list(get_joints_name().keys())
     angle = get_angle2(joints)
-    max_, min_ = points.max(0), points.min(0)
+    rot = Rotation.from_euler('z', angle)
+    joint_center = joints[names.index('Hip')].copy()    
+    new_points = points - joint_center
+    new_points = rot.apply(new_points, inverse=True).astype(np.float32)
+    max_, min_ = new_points.max(0), new_points.min(0)
     lwh = max_ - min_
-    center = min_ + lwh/2
+    center = (max_ + min_) / 2
+    center = rot.apply(center[None]).astype(np.float32)[0] + joint_center
     box3d = np.concatenate([center, lwh, angle], 
                            axis=0).astype(np.float32)
     return box3d
@@ -537,7 +543,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=list, default=[])
-    parser.add_argument('--frame', type=str, default='mayaProject.000946.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000452.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path
