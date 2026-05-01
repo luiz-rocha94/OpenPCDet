@@ -46,7 +46,7 @@ def draw_scenes(points=None, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
         ref_boxes = ref_boxes.cpu().numpy()
 
     vis = o3d.visualization.Visualizer()
-    vis.create_window()
+    vis.create_window(width=1024, height=1024)
 
     vis.get_render_option().point_size = 4.0
     vis.get_render_option().background_color = np.ones(3)
@@ -59,7 +59,7 @@ def draw_scenes(points=None, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
     if points is not None:
         pts = o3d.geometry.PointCloud()
         pts.points = o3d.utility.Vector3dVector(points[:, :3])
-        pts.colors = o3d.utility.Vector3dVector(np.zeros((points.shape[0], 3)))
+        pts.paint_uniform_color([0,0,0])
         vis.add_geometry(pts)
     
     if point_colors is not None:
@@ -98,7 +98,7 @@ def draw_scenes(points=None, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
     
     vis.get_view_control().set_lookat([0, 0, 1])
     vis.get_view_control().set_up([0, 0, 1])
-    vis.get_view_control().set_front([-1, 0, 0])
+    vis.get_view_control().set_front([0, -1, 0])
     vis.get_view_control().set_zoom(0.8)
     vis.poll_events()
     vis.update_renderer()
