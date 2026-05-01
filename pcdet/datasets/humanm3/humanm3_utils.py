@@ -7,19 +7,20 @@ import open3d as o3d
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 
+from pcdet.datasets.ubc3v.ubc3v_utils import get_bouding_box, get_angle2
+
 
 JOINT_NAMES = [
     'pelvis','left_hip','right_hip','left_knee','right_knee','left_ankle','right_ankle',
     'neck','head','left_shoulder','right_shoulder','left_elbow','right_elbow','left_wrist','right_wrist'
 ]
+UBC3V_ID = [4, 6, 7, 8, 10, 9, 11, 1, 0, 12, 15, 13, 16, 14, 17]
 
 # Conexões do esqueleto
 SKELETON = [
-    (0,1),(1,3),(3,5),      # left leg
-    (0,2),(2,4),(4,6),      # right leg
-    (0,7),(7,8),            # spine
-    (7,9),(9,11),(11,13),   # left arm
-    (7,10),(10,12),(12,14)  # right arm
+    ( 0,  1), ( 1,  2), ( 2,  3), ( 3,  4), ( 4,  5),
+    ( 5,  6), ( 6,  8), ( 8,  9), ( 1, 12), (12, 13), (13, 14),
+    ( 5,  7), ( 7, 10), (10, 11), (1, 15), (15, 16), (16, 17),
 ]
 
 
@@ -46,31 +47,14 @@ def draw_point_cloud(points, poses, bboxes):
     if len(bboxes.shape) == 1:
         bboxes = [bboxes]
     
-    for box3d in bboxes:
-        center = box3d[0:3]
-        lwh = box3d[3:6]
-        angle = box3d[6]
-        axis_angles = np.array([0, 0, angle + 1e-10])
-        rot = o3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
-        oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
-        line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
-        lines = np.asarray(line_set.lines)
-        lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
-        line_set.lines = o3d.utility.Vector2iVector(lines)
-        line_set.paint_uniform_color([0, 255, 0])
-        geometries.append(line_set)
-        
-        forward = 0.5*np.array([np.cos(angle), np.sin(angle), 0], dtype=center.dtype)
-        normal = np.stack([center, center + forward])
-        line_set = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(normal), 
-                                        lines=o3d.utility.Vector2iVector([(0, 1)]))
-        line_set.paint_uniform_color([255, 0, 0])
-        geometries.append(line_set)    
+    for box in bboxes:
+        box_lines = create_box(box)
+        geometries.append(box_lines)    
     
     coords = o3d.geometry.TriangleMesh.create_coordinate_frame(0.1)
     geometries.append(coords)
     o3d.visualization.draw_geometries(geometries, width=1080, height=1080, 
-                                      lookat=center, up=[0,0,1], front=[0,-1,0], zoom=0.6)
+                                      lookat=[0,0,0], up=[0,0,1], front=[0,-1,0], zoom=0.6)
 
 
 def map_files(split_path):
@@ -85,30 +69,59 @@ def map_files(split_path):
         f.writelines(lines)
 
 
-def get_angle(pose, right=True, plot=False):
-    if len(pose.shape) == 2:
-        pose = pose[None, :, :]
-    center = pose[:, JOINT_NAMES.index('pelvis')].copy()
-    rhip = pose[:, JOINT_NAMES.index('right_hip')].copy()
-    lhip = pose[:, JOINT_NAMES.index('left_hip')].copy()
-    rhip -= center
-    lhip -= center
-    rhip[:, 2] = 1
-    lhip[:, 2] = 1
-    dist = np.cross(rhip, lhip) if right else np.cross(lhip, rhip)
-    angle = np.arctan2(dist[:, 1], dist[:, 0]) # y / x
-    angle = angle + (angle < 0)*2*np.pi # [0, 2pi]
-    origin = np.zeros((2,3))
-    dest = np.concatenate([rhip, lhip, dist])[:, :2].T
-    if plot:
-        plt.quiver(*origin, *dest, color=['r','b','g'], scale=0.75)
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.show()
-    return angle
+def align_points(input_points, input_pose, target_pose):
+    output_points = input_points.copy()
+    output_pose = input_pose.copy()
+    root = 5
+    # root translation
+    translation = target_pose[root] - output_pose[root]
+    output_pose += translation
+    output_points[:, :3] += translation
+    
+    # root rotation
+    output_pose_angle = get_angle2(output_pose)
+    target_pose_angle = get_angle2(target_pose)
+    rot = Rotation.from_euler('z', target_pose_angle - output_pose_angle)
+    local = output_points[:, :3] - output_pose[root]
+    local = rot.apply(local)
+    output_points[:, :3] = local + output_pose[root]
+    local = output_pose - output_pose[root]
+    local = rot.apply(local)
+    output_pose = local + output_pose[root]
+    
+    # align
+    for start, stop in SKELETON:
+        if stop in (6,7):
+            continue
+        # mask
+        stop_mask = output_points[:, -1] == stop
+        # vectors
+        v_src = output_pose[stop] - output_pose[start]
+        v_tgt = target_pose[stop] - target_pose[start]
+        # rotation
+        rot, _ = Rotation.align_vectors(v_src, v_tgt)
+        #rot.apply(v_src, inverse=True)        
+        # scale
+        scale = np.linalg.norm(v_tgt) / np.linalg.norm(v_src)
+        # align points
+        local = output_points[stop_mask, :3] - output_pose[start]
+        local = rot.apply(local, inverse=True)*1#(1 if stop == 8 else scale)
+        output_points[stop_mask, :3] = output_pose[start] + local
+        # translation
+        translation = target_pose[start] - output_pose[start]
+        output_points[stop_mask, :3] += translation   
+    
+    return output_points, output_pose
 
 
-def load_data_json(path):
+def load_data_json(path, pcd_file):
+    with open(pcd_file, 'r') as f:
+        lines = f.readlines()
+        
+    points = np.vstack([np.array(line.replace('\n', '').split(' '), dtype=np.float32) 
+                        for line in lines[11:]])[:, :3]
+    
+    
     with open(path) as f:
         data = json.load(f)
     
@@ -116,24 +129,25 @@ def load_data_json(path):
         return None
 
     index = []
-    poses = []
     labels = []
-    bboxes = []
-    for obj_id, obj_joints in data.items():
-        pose = np.array(obj_joints, dtype=np.float32)
-        angle = get_angle(pose, False)
-        max_, min_ = pose.max(0), pose.min(0)
-        lwh = max_ - min_
-        center = min_ + lwh/2
-        box3d = np.concatenate([center, lwh, angle], 
-                               axis=0).astype(np.float32)
-        
+    poses = np.zeros((len(data),18,3), dtype=np.float32)
+    for i, (obj_id, obj_joints) in enumerate(data.items()):
+        poses[i, UBC3V_ID] = np.array(obj_joints, dtype=np.float32)
         index.append(int(obj_id))
-        poses.append(pose)
         labels.append('Pedestrian')
-        bboxes.append(box3d)
-    poses = np.stack(poses, axis=0)
-    bboxes = np.stack(bboxes, axis=0)
+    
+    poses[:, 5] = poses[:, [6,7]].mean(1)
+    poses[:, 2] = poses[:, [1,4]].mean(1)
+    poses[:, 3] = poses[:, [2,4]].mean(1)        
+    
+    dist = np.linalg.norm(points[:, None, None] - poses[None], axis=-1)
+    bboxes = np.zeros((len(data),7), dtype=np.float32)
+    for i in range(len(data)):
+        mask = (dist[:, i] < 0.3).any(1)
+        pose_points = np.concatenate([points[mask], poses[i]], axis=0)
+        box3d = get_bouding_box(pose_points, poses[i])
+        bboxes[i] = box3d
+    
     data_json = {'Posture':poses, 'Label':labels, 'ID':index, 'BBox3D': bboxes}
     return data_json
 
@@ -141,7 +155,7 @@ def load_data_json(path):
 def get_annos(sequence_path, name='*.pcd'):
     sequence_path = Path(sequence_path)
     split, subset_path = sequence_path.parts[-2:]
-    split_file = Path(__file__).resolve().parents[3] / 'data' / 'humanm3' / 'm3' / ('%s.txt' % split)    
+    split_file = Path(__file__).resolve().parents[3] / 'data' / 'humanm3' / ('%s.txt' % split)    
     pcd_file = sequence_path / 'pointcloud' / name
     if pcd_file.exists():
         pcd_files = [pcd_file]
@@ -159,7 +173,7 @@ def get_annos(sequence_path, name='*.pcd'):
         if not pose_file.exists():
             continue
         
-        data_json = load_data_json(pose_file)
+        data_json = load_data_json(pose_file, pcd_file)
         if data_json is None:
             continue
             
@@ -171,22 +185,39 @@ def get_annos(sequence_path, name='*.pcd'):
     return annos
 
 
-def create_skeleton(points):
-
-    colors = [[1,0,0] for _ in SKELETON]
-
+def create_skeleton(joints, color=[0,1,0]):
+    angle = get_angle2(joints)[0]
+    center = joints[5]
+    forward = center + 0.1*np.array([np.cos(angle), np.sin(angle), 0], dtype=center.dtype)
+    points = np.concatenate([joints, forward[None]], axis=0)
+    lines = SKELETON+[(5,18)]
+    
     line_set = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(points),
-        lines=o3d.utility.Vector2iVector(SKELETON)
+        lines=o3d.utility.Vector2iVector(lines)
     )
+    line_set.paint_uniform_color(color)
 
-    line_set.colors = o3d.utility.Vector3dVector(colors)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(joints)
+    pcd.paint_uniform_color(color)
 
-    joints = o3d.geometry.PointCloud()
-    joints.points = o3d.utility.Vector3dVector(points)
-    joints.paint_uniform_color([0,1,0])
+    return line_set, pcd
 
-    return line_set, joints
+
+def create_box(box3d):
+    center = box3d[0:3]
+    lwh = box3d[3:6]
+    angle = box3d[6]
+    axis_angles = np.array([0, 0, angle + 1e-10])
+    rot = o3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
+    oriented_box3d = o3d.geometry.OrientedBoundingBox(center, rot, lwh)  
+    line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(oriented_box3d)
+    lines = np.asarray(line_set.lines)
+    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+    line_set.paint_uniform_color([0, 255, 0])    
+    return line_set
 
 
 def visualize_sequence(sequence_path, **kwargs):
@@ -210,6 +241,10 @@ def visualize_sequence(sequence_path, **kwargs):
             lines, points = create_skeleton(joints)
             vis.add_geometry(lines)
             vis.add_geometry(points)
+        
+        for box in anno['BBox3D']:
+            lines = create_box(box)
+            vis.add_geometry(lines)
 
         vis.get_view_control().set_lookat([0, 0, 1])
         vis.get_view_control().set_up([0, 0, 1])
@@ -225,6 +260,45 @@ def visualize_sequence(sequence_path, **kwargs):
     vis.destroy_window()
 
 
+def visualize_model():
+    data_path = Path(r"D:\mestrado\OpenPCDet\data\humanm3")
+    input_points = np.load(data_path / 'model_points.npy')
+    input_pose = np.load(data_path / 'model_joints.npy')
+    target_pose = np.load(data_path / 'target_joints.npy') 
+    output_points, output_pose = align_points(input_points, input_pose, target_pose)    
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    vis.get_render_option().point_size = 4.0
+     
+    axis_pcd = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+    
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(output_points[:, :3])
+    pcd.paint_uniform_color([0,0,0])
+
+    vis.clear_geometries()
+    vis.add_geometry(axis_pcd)
+    vis.add_geometry(pcd)
+
+    for joints, color in zip([input_pose, target_pose, output_pose], [[1,0,0],[0,1,0], [0,0,1]]):
+        lines, points = create_skeleton(joints, color)
+        vis.add_geometry(lines)
+        vis.add_geometry(points)
+
+    vis.get_view_control().set_lookat([0, 0, 1])
+    vis.get_view_control().set_up([0, 0, 1])
+    vis.get_view_control().set_front([-1, 0, 0])
+    vis.get_view_control().set_zoom(1)
+    vis.poll_events()
+    vis.update_renderer()
+    vis.run()
+        
+
+    vis.destroy_window()
+
+
 if __name__ == "__main__":
-    dataset = Path(r"D:\mestrado\OpenPCDet\data\humanm3\m3\test\01")
-    visualize_sequence(dataset, name='001800.pcd')
+    dataset = Path(r"D:\mestrado\OpenPCDet\data\humanm3\test\01")
+    #visualize_sequence(dataset, name='001800.pcd')
+    visualize_model()

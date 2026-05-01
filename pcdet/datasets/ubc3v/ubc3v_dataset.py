@@ -3,6 +3,7 @@ import pickle
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import logging
 try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
@@ -288,8 +289,9 @@ class UBC3VDataset(DatasetTemplate):
                 plt.xticks(range(0, 101, 25))
                 plt.ylabel('mPJPE [mm]')
                 plt.ylim(0, 200)
-                plt.legend()
-                plt.savefig("dist.png")
+                handler = [handler for handler in self.logger.handlers if isinstance(handler, logging.FileHandler)][0]
+                dist_file = handler.baseFilename.replace('log', 'dist').replace('.txt', '.png')
+                plt.savefig(dist_file)
                 #plt.show()
             else:
                 raise NotImplementedError

@@ -267,27 +267,22 @@ def get_color_maps(cmap='hsv', plot=False, **kwargs):
     
     """
     colors_dict = OrderedDict()
-    colors_dict['right_hip'] = [2, 5]
-    colors_dict['left_hip'] = [3, 7]
-    colors_dict['right_leg'] = [18]
-    colors_dict['left_leg'] = [19]
-    colors_dict['right_foot'] = [20, 22, 24, 26]
-    colors_dict['left_foot'] = [21, 23, 25, 27]
-    colors_dict['torso'] = [0, 1, 4, 6, 8, 9, 10, 15, 16, 17, 43, 44]
     colors_dict['head'] = [38, 39, 40, 41, 42]
-    colors_dict['right_shoulder'] = [12, 13]
+    colors_dict['torso'] = [0, 1, 4, 6, 8, 9, 10, 15, 16, 17, 43, 44]
+    colors_dict['left_hip'] = [3, 7]
+    colors_dict['right_hip'] = [2, 5]
+    colors_dict['left_leg'] = [19]
+    colors_dict['left_foot'] = [21, 23, 25, 27]
+    colors_dict['right_leg'] = [18]
+    colors_dict['right_foot'] = [20, 22, 24, 26]
     colors_dict['left_shoulder'] = [11, 14]
-    colors_dict['right_arm'] = [30, 31]
     colors_dict['left_arm'] = [34, 35]
-    colors_dict['right_hand'] = [32, 33, 28]    
     colors_dict['left_hand'] = [36, 37, 29]
-    joint_dict = {'left_hip':1, 'right_hip':2,
-                'left_leg':3, 'right_leg':4,
-                'left_foot':5, 'right_foot':6,
-                'torso':7, 'head':8, 
-                'left_shoulder':9, 'right_shoulder':10,
-                'left_arm':11, 'right_arm':12,
-                'left_hand':13, 'right_hand':14}
+    colors_dict['right_shoulder'] = [12, 13]
+    colors_dict['right_arm'] = [30, 31]
+    colors_dict['right_hand'] = [32, 33, 28]    
+    joint_dict = {0:0, 1:5, 2:5, 3:5, 4:5, 5:5, 6:17, 7:19, 8:21, 9:22, 10:26, 
+                  11:27, 12:31, 13:33, 14:35, 15:38, 16:40, 17:42}
     #"""
     
     colors_list = []
@@ -543,7 +538,7 @@ if __name__ == '__main__':
     parser.add_argument('--split_path', type=str, default='train')
     parser.add_argument('--sequence_path', type=str, default='150')
     parser.add_argument('--cam', type=list, default=[])
-    parser.add_argument('--frame', type=str, default='mayaProject.000452.png')
+    parser.add_argument('--frame', type=str, default='mayaProject.000946.png')
     args = parser.parse_args()
     
     subset_path = Path(args.base_path) / args.subset_path
@@ -564,8 +559,10 @@ if __name__ == '__main__':
     draw_point_cloud(points, colors[:, :3], normals, joints, box3d)
     #map_files(subset_path, save_path, num_workers=4)
 
-    #model_points = np.concatenate([points, colors[:, 4, None]], axis=-1)
-    #model_points = model_points[model_points[:,3] != 0]
-    #model_joints = joints[[5, 7, 6, 10, 8, 11, 9, 1, 0, 15, 12, 16, 13, 17, 14]]
+    #model_points = np.concatenate([points, colors], axis=-1)
+    #model_points = model_points[colors[:,3] != 0]
     #np.save('model_points.npy', model_points)
-    #np.save('model_joints.npy', model_joints)
+    #np.save('model_joints.npy', joints)
+    #joint_idx = np.load('model_points.npy')[:,-1]
+    #model_points[:,-1] = joint_idx
+    #np.save('model_points.npy', model_points)

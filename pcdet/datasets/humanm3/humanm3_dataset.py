@@ -3,16 +3,18 @@ import pickle
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
+import logging
 try:
     from ...ops.roiaware_pool3d import roiaware_pool3d_utils
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
-    from .humanm3_utils import get_annos, draw_point_cloud
+    from .humanm3_utils import get_annos, draw_point_cloud, align_points
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
-    from humanm3_utils import get_annos, draw_point_cloud
+    from humanm3_utils import get_annos, draw_point_cloud, align_points
 
 
 class HumanM3Dataset(DatasetTemplate):    
@@ -28,26 +30,43 @@ class HumanM3Dataset(DatasetTemplate):
         super().__init__(
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
+        
         split = self.dataset_cfg.DATA_SPLIT[self.mode]
-        self.set_split(split, False)
-        self.humanm3_infos = []
-        self.include_data(self.mode)
+        self.set_split(split)
         self.map_class_to_kitti = self.dataset_cfg.MAP_CLASS_TO_KITTI
 
-    def include_data(self, mode):
+    def include_data(self):
         self.logger.info('Loading HumanM3 dataset.')
-        humanm3_infos = []
-        for info_path in self.dataset_cfg.INFO_PATH[mode]:
+        self.humanm3_infos = []
+        for info_path in self.dataset_cfg.INFO_PATH[self.split]:
             info_path = self.root_path / info_path
             if not info_path.exists():
                 continue
             with open(info_path, 'rb') as f:
                 infos = pickle.load(f)
-                humanm3_infos.extend(infos)
+            
+            infos = infos['Pedestrian'] if isinstance(infos, dict) else infos
+            self.humanm3_infos.extend(infos)
 
-        self.humanm3_infos.extend(humanm3_infos)
-        self.logger.info('Total samples for HumanM3 dataset: %d' % (len(humanm3_infos)))
+        self.logger.info('Total samples for HumanM3 dataset: %d' % (len(self.humanm3_infos)))
 
+    def set_split(self, split):        
+        self.split = split
+        self.include_data()
+        split_file = self.root_path / (self.split+'.txt')
+        assert split_file.exists()
+        with  open(split_file, 'r') as f:
+            lines = f.readlines()
+        lines = [line.replace('\n','') for line in lines] 
+            
+        self.sample_id_list = {line[-24:-22]+line[-8:-4]:line for line in lines}
+
+    def __len__(self):
+        if self._merge_all_iters_to_one_epoch:
+            return len(self.sample_id_list) * self.total_epochs
+
+        return len(self.humanm3_infos)
+    
     def get_anno(self, idx):
         pcd_file = self.root_path / self.sample_id_list[idx]
         sequence_path, name = pcd_file.parents[1], pcd_file.name
@@ -67,45 +86,51 @@ class HumanM3Dataset(DatasetTemplate):
             
         point_features = np.vstack([np.array(line.replace('\n', '').split(' '), dtype=np.float32) 
                                     for line in lines[11:]])
-        max_, min_ = point_features.max(0)[:3], point_features.min(0)[:3]
-        offset = (max_ + min_) / 2
-        offset[2] = min_[2]
-        point_features[:, :3] = point_features[:, :3] - offset[None, :]      
-        point_features = point_features[point_features[:, 2] > 0.10]
         if return_offset:
+            offset = np.zeros(3, dtype=np.float32)
+            # center
+            max_, min_ = point_features.max(0)[:3], point_features.min(0)[:3]
+            center = (max_ + min_) / 2
+            # kitti offset
+            offset[0] = min_[0]
+            offset[1] = center[1]
+            offset[2] = min_[2] + 3
+            point_features[:, :3] = point_features[:, :3] - offset[None, :]      
+            #point_features = point_features[point_features[:, 2] > (point_features[:, 2].min() + 0.10)]
             return point_features, offset
         
         return point_features
-
-    def set_split(self, split, call=True):
-        if call:
-            super().__init__(
-                dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training,
-                root_path=self.root_path, logger=self.logger
-            )
-        
-        self.split = split
-        split_file = self.root_path / (self.split+'.txt')
-        assert split_file.exists()
-        with  open(split_file, 'r') as f:
-            lines = f.readlines()
-        lines = [line.replace('\n','') for line in lines] 
-            
-        self.sample_id_list = {line[-24:-22]+line[-8:-4]:line for line in lines}
-
-    def __len__(self):
-        if self._merge_all_iters_to_one_epoch:
-            return len(self.sample_id_list) * self.total_epochs
-
-        return len(self.humanm3_infos)
+    
+    def draw_skeleton(self, target_pose):
+        input_pose = np.load(self.root_path / 'model_joints.npy')
+        input_points = np.load(self.root_path / 'model_points.npy')
+        output_points, _ = align_points(input_points, input_pose, target_pose)
+        return output_points[:, :-1]
 
     def __getitem__(self, index):
         if self._merge_all_iters_to_one_epoch:
             index = index % len(self.humanm3_infos)
 
         info = copy.deepcopy(self.humanm3_infos[index])
-        sample_idx = info['point_cloud']['lidar_idx']
-        points = self.get_lidar(sample_idx)
+        data_src = self.dataset_cfg.get('DATA_SRC')
+        if data_src == 'align':
+            sample_idx = index
+            #info['pose'][:, 2] += 0.1 # foot
+            points = self.draw_skeleton(info['annos']['pose'][0])
+            offset = np.zeros(3, dtype=np.float32)
+            offset[2] = points[:, 2].min()
+            points[:, :3] -= offset[None]
+        elif data_src == 'crop':
+            sample_idx = index
+            #info['pose'][:, 2] += 0.1 # foot
+            points = np.load(self.root_path / info['path'])
+            offset = np.zeros(3, dtype=np.float32)
+            offset[2] = points[:, 2].min()
+            points[:, :3] -= offset[None]
+        else:
+            sample_idx = info['point_cloud']['lidar_idx']
+            points, offset = self.get_lidar(sample_idx, return_offset=True)
+        
         input_dict = {
             'frame_id': sample_idx,
             'points': points
@@ -117,6 +142,10 @@ class HumanM3Dataset(DatasetTemplate):
             gt_names = annos['name']
             gt_boxes_lidar = annos['gt_boxes_lidar']
             gt_poses = annos['pose']
+            
+            gt_poses = gt_poses - offset[None, None, :]
+            gt_boxes_lidar[:, :3] = gt_boxes_lidar[:, :3] - offset[None, :]
+            
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar,
@@ -157,7 +186,6 @@ class HumanM3Dataset(DatasetTemplate):
             pred_scores = box_dict['pred_scores'].cpu().numpy()
             pred_boxes = box_dict['pred_boxes'].cpu().numpy()
             pred_labels = box_dict['pred_labels'].cpu().numpy()
-            pearson_scores = box_dict['pearson_scores'].cpu().numpy()
             normals_scores = box_dict['normals_scores'].cpu().numpy()
             jpe_scores = box_dict['jpe_scores'].cpu().numpy()
             jap_scores = box_dict['jap_scores'].cpu().numpy()
@@ -169,10 +197,13 @@ class HumanM3Dataset(DatasetTemplate):
             pred_dict['score'] = pred_scores
             pred_dict['boxes_lidar'] = pred_boxes
             pred_dict['pred_labels'] = pred_labels
-            pred_dict['pearson_scores'] = pearson_scores
             pred_dict['normals_scores'] = normals_scores
             pred_dict['jpe_scores'] = jpe_scores
             pred_dict['jap_scores'] = jap_scores
+            
+            if 'pearson_scores' in box_dict:
+                pearson_scores = box_dict['pearson_scores'].cpu().numpy()
+                pred_dict['pearson_scores'] = pearson_scores
 
             return pred_dict
 
@@ -206,12 +237,12 @@ class HumanM3Dataset(DatasetTemplate):
             return ap_result_str, ap_dict
 
         eval_det_annos = copy.deepcopy(det_annos)
-        eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.humanm3_infos]
 
         eval_metrics = kwargs['eval_metric'] if isinstance(kwargs['eval_metric'], list) else [kwargs['eval_metric']]
         result_str, result_dict = '\n', {}
         for eval_metric in eval_metrics:
             if eval_metric == 'kitti':
+                eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.humanm3_infos]
                 ap_result_str, ap_dict = kitti_eval(eval_det_annos, eval_gt_annos, self.map_class_to_kitti)
                 result_str += ap_result_str 
                 result_dict.update(ap_dict)
@@ -283,8 +314,10 @@ class HumanM3Dataset(DatasetTemplate):
                 plt.ylabel('mPJPE [mm]')
                 plt.ylim(0, 200)
                 plt.legend()
-                plt.savefig("dist.png")
-                plt.show()
+                handler = [handler for handler in self.logger.handlers if isinstance(handler, logging.FileHandler)][0]
+                dist_file = handler.baseFilename.replace('log', 'dist').replace('.txt', '.png')
+                plt.savefig(dist_file)
+                #plt.show()
             else:
                 raise NotImplementedError
 
@@ -294,23 +327,21 @@ class HumanM3Dataset(DatasetTemplate):
         import concurrent.futures as futures
 
         def process_single_scene(sequence_path):
-            print('%s sequence: %s' % (self.split, sequence_path.name))
             annos = get_annos(sequence_path)
             infos = []
             for i, anno in enumerate(annos):
-                print('%s sequence: %s progress: %d/%d' % (self.split, sequence_path.name, i+1, len(annos)))
+                print('split: {}; sequence: {}; step {}/{}'.format(self.split, sequence_path.name,
+                                                                   i+1, len(annos)))
                 info = {}
                 sample_idx = anno['Index']
                 pc_info = {'num_features': num_features, 'lidar_idx': sample_idx}
                 info['point_cloud'] = pc_info
     
                 if has_label:
-                    points, offset = self.get_lidar(sample_idx, return_offset=True)
+                    #points = self.get_lidar(sample_idx)
                     annotations = {}
                     joints = anno['Posture']
-                    joints = joints - offset[None, None, :]
                     gt_boxes_lidar = anno['BBox3D']
-                    gt_boxes_lidar[:, :3] = gt_boxes_lidar[:, :3] - offset[None, :]
                     annotations['pose'] = joints
                     annotations['name'] = np.array(anno['Label']).reshape(-1)
                     annotations['id'] = np.array(anno['ID']).reshape(-1)
@@ -321,7 +352,7 @@ class HumanM3Dataset(DatasetTemplate):
 
             return infos
 
-        split_path = self.root_path.parent / self.dataset_cfg.DATA_SRC / self.split
+        split_path = self.root_path / self.split
         sequences = sorted(split_path.glob('*'))
         
         # create a thread pool to improve the velocity
@@ -361,18 +392,21 @@ class HumanM3Dataset(DatasetTemplate):
             ).numpy()  # (nboxes, npoints)
 
             for i in range(num_obj):
-                filename = '%s_%s_%d.bin' % (sample_idx, names[i], i)
+                filename = '%s_%s_%d.npy' % (sample_idx, names[i], i)
                 filepath = database_save_path / filename
                 gt_points = points[point_indices[i] > 0]
-
-                gt_points[:, :3] -= gt_boxes[i, :3]
-                with open(filepath, 'w') as f:
-                    gt_points.tofile(f)
+                offset = gt_boxes[i, :3] - np.array([0,0,gt_boxes[i, 5]/2], dtype=np.float32)
+                gt_points[:, :3] -= offset[None]
+                gt_poses[i, :] -= offset[None]
+                gt_boxes[i, :3] -= offset
+                #draw_point_cloud(gt_points[:, :3], gt_poses[i][None], gt_boxes[i][None])
+                np.save(filepath, gt_points)
 
                 if (used_classes is None) or names[i] in used_classes:
                     db_path = str(filepath.relative_to(self.root_path))  # gt_database/xxxxx.bin
-                    db_info = {'name': names[i], 'path': db_path, 'gt_idx': i, 'pose': gt_poses[i],
-                               'box3d_lidar': gt_boxes[i], 'num_points_in_gt': gt_points.shape[0]}
+                    db_info = {'path': db_path, 'gt_idx': i, 'box3d_lidar': gt_boxes[i], 'num_points_in_gt': gt_points.shape[0],
+                               'offset': offset, 
+                               'annos':{'name':np.array(names[i]).reshape(-1), 'pose':gt_poses[i][None], 'gt_boxes_lidar':gt_boxes[i][None]}}
                     if names[i] in all_db_infos:
                         all_db_infos[names[i]].append(db_info)
                     else:
@@ -410,7 +444,7 @@ def create_humanm3_infos(dataset_cfg, class_names, data_path, save_path, workers
     num_features = len(dataset_cfg.POINT_FEATURE_ENCODING.src_feature_list)
 
     train_filename = save_path / ('humanm3_infos_%s.pkl' % train_split)
-    val_filename = save_path / ('humanm3_infos_%s.pkl' % test_split)
+    test_filename = save_path / ('humanm3_infos_%s.pkl' % test_split)
 
     print('------------------------Start to generate data infos------------------------')
 
@@ -423,16 +457,18 @@ def create_humanm3_infos(dataset_cfg, class_names, data_path, save_path, workers
     print('HumanM3 info train file is saved to %s' % train_filename)
 
     dataset.set_split(test_split)
-    humanm3_infos_val = dataset.get_infos(
+    humanm3_infos_test = dataset.get_infos(
         class_names, num_workers=workers, has_label=True, num_features=num_features
     )
-    with open(val_filename, 'wb') as f:
-        pickle.dump(humanm3_infos_val, f)
-    print('HumanM3 info train file is saved to %s' % val_filename)
+    with open(test_filename, 'wb') as f:
+        pickle.dump(humanm3_infos_test, f)
+    print('HumanM3 info test file is saved to %s' % test_filename)
 
     print('------------------------Start create groundtruth database for data augmentation------------------------')
-    #dataset.set_split(train_split)
-    #dataset.create_groundtruth_database(train_filename, split=train_split)
+    dataset.set_split(train_split)
+    dataset.create_groundtruth_database(train_filename, split=train_split)
+    dataset.set_split(test_split)
+    dataset.create_groundtruth_database(test_filename, split=test_split)
     print('------------------------Data preparation done------------------------')
 
 
@@ -441,20 +477,19 @@ if __name__ == '__main__':
     import yaml
     from pathlib import Path
     from easydict import EasyDict
+    ROOT_DIR = Path(__file__).resolve().parents[3]
+    dataset_cfg = EasyDict(yaml.safe_load(open(ROOT_DIR / 'tools/cfgs/dataset_configs/humanm3_dataset.yaml')))
+    data_path = Path(dataset_cfg['DATA_PATH'])
     if sys.argv.__len__() > 1 and sys.argv[1] == 'create_humanm3_infos':
-        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
         create_humanm3_infos(
         dataset_cfg=dataset_cfg,
         class_names=['Pedestrian'],
-        data_path=ROOT_DIR / 'data' / 'humanm3' / 'm3',
-        save_path=ROOT_DIR / 'data' / 'humanm3' / 'm3',
+        data_path=ROOT_DIR / data_path,
+        save_path=ROOT_DIR / data_path,
         )
     else:
-        ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        dataset_cfg = EasyDict(yaml.safe_load(open(ROOT_DIR / 'tools/cfgs/dataset_configs/humanm3_dataset.yaml')))
         dataset = HumanM3Dataset(
             dataset_cfg=dataset_cfg, class_names=['Pedestrian'], 
-            root_path=ROOT_DIR / 'data' / 'humanm3' / 'm3',
+            root_path=data_path,
             training=False, logger=common_utils.create_logger()
         )
