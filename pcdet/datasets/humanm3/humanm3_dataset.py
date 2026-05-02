@@ -10,11 +10,13 @@ try:
     from ...utils import box_utils, common_utils
     from ..dataset import DatasetTemplate
     from .humanm3_utils import get_annos, draw_point_cloud, align_points
+    from ..ubc3v.ubc3v_utils import get_color_maps
 except:
     from pcdet.ops.roiaware_pool3d import roiaware_pool3d_utils
     from pcdet.utils import box_utils, common_utils
     from pcdet.datasets.dataset import DatasetTemplate
     from humanm3_utils import get_annos, draw_point_cloud, align_points
+    from pcdet.datasets.ubc3v.ubc3v_utils import get_color_maps
 
 
 class HumanM3Dataset(DatasetTemplate):    
@@ -45,7 +47,9 @@ class HumanM3Dataset(DatasetTemplate):
             with open(info_path, 'rb') as f:
                 infos = pickle.load(f)
             
-            infos = infos['Pedestrian'] if isinstance(infos, dict) else infos
+            if isinstance(infos, dict):
+                infos = infos['Pedestrian']
+                infos = [info for info in infos if info['num_points_in_gt'] >= 128]
             self.humanm3_infos.extend(infos)
 
         self.logger.info('Total samples for HumanM3 dataset: %d' % (len(self.humanm3_infos)))
@@ -95,8 +99,7 @@ class HumanM3Dataset(DatasetTemplate):
             offset[0] = min_[0]
             offset[1] = center[1]
             offset[2] = min_[2] + 3
-            point_features[:, :3] = point_features[:, :3] - offset[None, :]      
-            #point_features = point_features[point_features[:, 2] > (point_features[:, 2].min() + 0.10)]
+            point_features[:, :3] = point_features[:, :3] - offset[None, :]
             return point_features, offset
         
         return point_features
@@ -113,17 +116,21 @@ class HumanM3Dataset(DatasetTemplate):
 
         info = copy.deepcopy(self.humanm3_infos[index])
         data_src = self.dataset_cfg.get('DATA_SRC')
-        if data_src == 'align':
+        if data_src:
             sample_idx = index
-            #info['pose'][:, 2] += 0.1 # foot
-            points = self.draw_skeleton(info['annos']['pose'][0])
-            offset = np.zeros(3, dtype=np.float32)
-            offset[2] = points[:, 2].min()
-            points[:, :3] -= offset[None]
-        elif data_src == 'crop':
-            sample_idx = index
-            #info['pose'][:, 2] += 0.1 # foot
             points = np.load(self.root_path / info['path'])
+            feat = [0,1,2]
+            if data_src == 'align':
+                mask = points[:, -1] == 0
+                feat += [3,4,5]
+            elif data_src == 'crop':
+                mask = points[:, -1] == 1
+            elif data_src == 'color':
+                mask = points[:, -1] == 1
+                feat += [3,4,5]
+            
+            feat += [6]
+            points = points[mask][:,feat]
             offset = np.zeros(3, dtype=np.float32)
             offset[2] = points[:, 2].min()
             points[:, :3] -= offset[None]
@@ -146,10 +153,14 @@ class HumanM3Dataset(DatasetTemplate):
             gt_poses = gt_poses - offset[None, None, :]
             gt_boxes_lidar[:, :3] = gt_boxes_lidar[:, :3] - offset[None, :]
             
+            cmap = 'hsv'
+            _, color_map, _, _, _ = get_color_maps(cmap=cmap)
+            
             input_dict.update({
                 'gt_names': gt_names,
                 'gt_boxes': gt_boxes_lidar,
-                'gt_poses': gt_poses
+                'gt_poses': gt_poses,
+                'cmap': color_map,
             })
 
         data_dict = self.prepare_data(data_dict=input_dict)
@@ -315,8 +326,11 @@ class HumanM3Dataset(DatasetTemplate):
                 plt.ylim(0, 200)
                 plt.legend()
                 handler = [handler for handler in self.logger.handlers if isinstance(handler, logging.FileHandler)][0]
-                dist_file = handler.baseFilename.replace('log', 'dist').replace('.txt', '.png')
-                plt.savefig(dist_file)
+                log_file = Path(handler.baseFilename)
+                parts = ['dist'] + log_file.name.split('_')[1:]
+                dist_file = '_'.join(parts)
+                dist_file = log_file.with_name(dist_file).with_suffix('.png')
+                plt.savefig(str(dist_file))
                 #plt.show()
             else:
                 raise NotImplementedError
@@ -400,11 +414,21 @@ class HumanM3Dataset(DatasetTemplate):
                 gt_poses[i, :] -= offset[None]
                 gt_boxes[i, :3] -= offset
                 #draw_point_cloud(gt_points[:, :3], gt_poses[i][None], gt_boxes[i][None])
+                pose_points = self.draw_skeleton(gt_poses[i])
+                dist = np.linalg.norm(gt_points[:, None, :3] - pose_points[None, :, :3], axis=-1)
+                min_idx = np.argmin(dist, 1)
+                colors = pose_points[min_idx, 3:]
+                num_points_in_gt = len(gt_points)
+                is_gt = np.ones((num_points_in_gt,1), dtype=gt_points.dtype)
+                gt_points = np.concatenate([gt_points[:,:3], colors, is_gt], axis=1)
+                is_pose = np.zeros((len(pose_points),1), dtype=gt_points.dtype)
+                pose_points = np.concatenate([pose_points, is_pose], axis=1)
+                gt_points = np.concatenate([gt_points, pose_points], axis=0)
                 np.save(filepath, gt_points)
 
                 if (used_classes is None) or names[i] in used_classes:
                     db_path = str(filepath.relative_to(self.root_path))  # gt_database/xxxxx.bin
-                    db_info = {'path': db_path, 'gt_idx': i, 'box3d_lidar': gt_boxes[i], 'num_points_in_gt': gt_points.shape[0],
+                    db_info = {'path': db_path, 'gt_idx': i, 'box3d_lidar': gt_boxes[i], 'num_points_in_gt': num_points_in_gt,
                                'offset': offset, 
                                'annos':{'name':np.array(names[i]).reshape(-1), 'pose':gt_poses[i][None], 'gt_boxes_lidar':gt_boxes[i][None]}}
                     if names[i] in all_db_infos:

@@ -68,7 +68,7 @@ def parse_config():
     parser.add_argument('--det_ckpt', type=str, default='cfgs/humanm3_models/second_iou_latest.pth', help='specify the pretrained model')
     parser.add_argument('--pose_cfg_file', type=str, default='cfgs/humanm3_models/vps_pose_left_crop_128.yaml',
                         help='specify the config for demo')
-    parser.add_argument('--pose_ckpt', type=str, default='D:/mestrado/OpenPCDet/output/ubc3v_models/vps_pose_left_128_noise/default/ckpt/latest_model.pth', help='specify the pretrained model')
+    parser.add_argument('--pose_ckpt', type=str, default=r"D:\mestrado\OpenPCDet\output\humanm3_models\vps_pose_left_color_128\default\ckpt\latest_model.pth", help='specify the pretrained model')
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')

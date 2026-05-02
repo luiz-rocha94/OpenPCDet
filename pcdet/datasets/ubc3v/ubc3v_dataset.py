@@ -289,9 +289,13 @@ class UBC3VDataset(DatasetTemplate):
                 plt.xticks(range(0, 101, 25))
                 plt.ylabel('mPJPE [mm]')
                 plt.ylim(0, 200)
+                plt.legend()
                 handler = [handler for handler in self.logger.handlers if isinstance(handler, logging.FileHandler)][0]
-                dist_file = handler.baseFilename.replace('log', 'dist').replace('.txt', '.png')
-                plt.savefig(dist_file)
+                log_file = Path(handler.baseFilename)
+                parts = ['dist'] + log_file.name.split('_')[1:]
+                dist_file = '_'.join(parts)
+                dist_file = log_file.with_name(dist_file).with_suffix('.png')
+                plt.savefig(str(dist_file))
                 #plt.show()
             else:
                 raise NotImplementedError

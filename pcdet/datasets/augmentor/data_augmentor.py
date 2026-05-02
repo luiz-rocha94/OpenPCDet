@@ -100,7 +100,6 @@ class DataAugmentor(object):
                                         ], dtype=np.int32)
                     inv_cmap = data_dict['cmap'][inv_idx]
                     inv_cmap[0] = 0
-                    gt_poses = gt_poses[:, inv_pose]
                     src_idx = points[:, -1].astype(np.int32)
                     points[:, 3:6] = inv_cmap[src_idx]
                     points[:, -1] = inv_idx[src_idx] 
