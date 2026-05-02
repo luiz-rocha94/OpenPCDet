@@ -251,6 +251,7 @@ class UBC3VDataset(DatasetTemplate):
                 mean_jpe_scores = jpe_scores.mean(1)*1e3
                 sorted_idx = np.argsort(mean_jpe_scores)
                 sorted_mean_jpe_scores = mean_jpe_scores[sorted_idx]
+                lim = 100
                 q1 = np.percentile(sorted_mean_jpe_scores, 25)
                 q2 = np.percentile(sorted_mean_jpe_scores, 50)
                 q3 = np.percentile(sorted_mean_jpe_scores, 75)
@@ -258,8 +259,7 @@ class UBC3VDataset(DatasetTemplate):
                 q0 = max(q3 - 1.5 * iqr, sorted_mean_jpe_scores.min())
                 q0 = np.min(sorted_mean_jpe_scores)
                 q4 = min(q3 + 1.5 * iqr, sorted_mean_jpe_scores.max())
-                q5 = 1e2
-                q6 = sorted_mean_jpe_scores.max()
+                q5 = sorted_mean_jpe_scores.max()
                 p_max = 0
                 p_idx = np.zeros(0, dtype=np.float32)
                 for i, (ql, qr) in enumerate([(q0,q1), (q1,q2), (q2,q3), (q3,q4), (q4,q5)]):
@@ -270,11 +270,11 @@ class UBC3VDataset(DatasetTemplate):
                     p_max = p + mask.mean()*1e2
                     p_idx = np.concatenate([p_idx, np.linspace(p, p_max, mask.sum())])
                     k=3
-                    result_str += '\nQ{} {}-{}% {:.3f}-{:.3f}mm {:.3f}% data'.format(i, i*25, (i+1)*25, ql, qr, (1*mask).mean()*1e2)
+                    result_str += '\nQ{} {:.1f}-{:.1f}% {:.3f}-{:.3f}mm {:.3f}% data'.format(i, p, p_max, ql, qr, (1*mask).mean()*1e2)
                     result_str += '\nBest\n'+'\n'.join(data_format(zip(q_idx[:k], q_jpe_scores[:k])))
                     result_str += '\nWorst\n'+'\n'.join(data_format(zip(q_idx[-k:], q_jpe_scores[-k:])))
                 
-                mask = sorted_mean_jpe_scores >= q5
+                mask = sorted_mean_jpe_scores >= lim
                 p_idx = np.concatenate([p_idx, np.linspace(p_max, 100, mask.sum())])
                 p_idx = np.linspace(0, 100, len(sorted_mean_jpe_scores))
                 plt.plot(p_idx, sorted_mean_jpe_scores, '-k')
@@ -283,8 +283,8 @@ class UBC3VDataset(DatasetTemplate):
                 plt.plot([50, 50], [0, 1e3], '-b', label='50% {:.3f}mm'.format(q2))
                 plt.plot([75, 75], [0, 1e3], '-b', label='75% {:.3f}mm'.format(q3))
                 plt.plot([p, p], [0, 1e3], '-b', label='Max ({:.0f}%) {:.3f}mm'.format(p, q4))
-                plt.plot([100, 100], [0, 1e3], '-b', label='100% {:.3f}mm'.format(q6))
-                plt.plot([0, 100], [q5, q5], '-r', label='Limite 100mm')
+                plt.plot([100, 100], [0, 1e3], '-b', label='100% {:.3f}mm'.format(q5))
+                plt.plot([0, 100], [lim, lim], '-r', label='Limite 100mm')
                 plt.xlabel('Distribuição [%]')
                 plt.xticks(range(0, 101, 25))
                 plt.ylabel('mPJPE [mm]')
